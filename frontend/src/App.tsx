@@ -13,6 +13,7 @@ function App() {
   const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null)
   const [state, setState] = useState<AppState>('idle')
   const [error, setError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   // Cargar noticias al iniciar
   useEffect(() => {
@@ -60,6 +61,31 @@ function App() {
     }
   }
 
+  const handleClearAllNews = async () => {
+    if (!confirm('¿Estás seguro de limpiar todas las noticias? Esta acción no se puede deshacer.')) {
+      return
+    }
+
+    try {
+      setState('loading')
+      setError(null)
+      await newsApi.clearAll()
+      setNewsItems([])
+      // Limpiar análisis ya que no hay noticias
+      setAnalysis(null)
+      setSuccessMessage('✅ Todas las noticias han sido eliminadas correctamente.')
+      setState('idle')
+      
+      // Ocultar mensaje de éxito después de 3 segundos
+      setTimeout(() => {
+        setSuccessMessage(null)
+      }, 3000)
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Error al limpiar las noticias')
+      setState('error')
+    }
+  }
+
   const handleGenerateAnalysis = async () => {
     try {
       setState('generating')
@@ -91,6 +117,13 @@ function App() {
           </div>
         )}
 
+        {successMessage && (
+          <div className="success-banner">
+            <span>{successMessage}</span>
+            <button onClick={() => setSuccessMessage(null)}>✕</button>
+          </div>
+        )}
+
         <div className="app-content">
           <div className="left-panel">
             <PortfolioTable onUpdate={() => {
@@ -106,6 +139,7 @@ function App() {
             <NewsList
               items={newsItems}
               onDelete={handleDeleteNews}
+              onClearAll={handleClearAllNews}
               isLoading={state === 'loading'}
             />
           </div>

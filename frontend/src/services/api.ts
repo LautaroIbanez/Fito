@@ -76,6 +76,11 @@ export const newsApi = {
     await axios.delete(`${API_BASE_URL}/news/${id}`)
   },
 
+  clearAll: async (): Promise<NewsItem[]> => {
+    const response = await axios.delete<{ items: NewsItem[]; total: number }>(`${API_BASE_URL}/news`)
+    return response.data.items
+  },
+
   generateAnalysis: async (): Promise<AnalysisResponse> => {
     const response = await axios.post<AnalysisResponse>(`${API_BASE_URL}/analysis`, {})
     return response.data

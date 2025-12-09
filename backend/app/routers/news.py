@@ -110,3 +110,35 @@ async def delete_news(
             detail="Error interno al eliminar la noticia"
         )
 
+
+@router.delete("", response_model=NewsListResponse, status_code=status.HTTP_200_OK)
+async def clear_all_news(
+    db: Session = Depends(get_db)
+):
+    """
+    Elimina todas las noticias almacenadas y devuelve una lista vacía.
+    """
+    try:
+        # Contar noticias antes de eliminar
+        total_before = db.query(NewsItem).count()
+        
+        # Eliminar todas las noticias
+        db.query(NewsItem).delete()
+        db.commit()
+        
+        logger.info(f"Todas las noticias eliminadas: {total_before} noticias borradas")
+        
+        # Devolver lista vacía
+        return NewsListResponse(
+            items=[],
+            total=0
+        )
+        
+    except Exception as e:
+        logger.error(f"Error al limpiar todas las noticias: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno al limpiar las noticias"
+        )
+

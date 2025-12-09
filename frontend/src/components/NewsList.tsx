@@ -4,10 +4,11 @@ import './NewsList.css'
 interface NewsListProps {
   items: NewsItem[]
   onDelete: (id: number) => void
+  onClearAll: () => void
   isLoading: boolean
 }
 
-export default function NewsList({ items, onDelete, isLoading }: NewsListProps) {
+export default function NewsList({ items, onDelete, onClearAll, isLoading }: NewsListProps) {
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
     return new Intl.DateTimeFormat('es-ES', {
@@ -51,7 +52,18 @@ export default function NewsList({ items, onDelete, isLoading }: NewsListProps) 
 
   return (
     <div className="news-list-container">
-      <h2>📋 Noticias Guardadas ({items.length})</h2>
+      <div className="news-list-header">
+        <h2>📋 Noticias Guardadas ({items.length})</h2>
+        {items.length > 0 && (
+          <button
+            className="clear-all-button"
+            onClick={onClearAll}
+            title="Limpiar todas las noticias"
+          >
+            🗑️ Limpiar Noticias
+          </button>
+        )}
+      </div>
       <div className="news-list">
         {items.map((item) => (
           <div key={item.id} className="news-item">
