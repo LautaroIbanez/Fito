@@ -1,0 +1,72 @@
+"""Aplicación principal FastAPI."""
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+import logging
+
+from app.config import validate_config, RATE_LIMIT_PER_MINUTE
+from app.database import init_db
+from app.routers import news, analysis, portfolio
+
+# Validar configuración antes de iniciar
+validate_config()
+
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
+
+# Inicializar base de datos
+init_db()
+logger.info("Base de datos inicializada")
+
+# Rate limiter
+limiter = Limiter(key_func=get_remote_address)
+app = FastAPI(
+    title="News Analyzer API",
+    description="API para análisis de noticias con OpenAI",
+    version="1.0.0"
+)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Routers
+app.include_router(news.router, prefix="/api")
+app.include_router(analysis.router, prefix="/api")
+app.include_router(portfolio.router, prefix="/api")
+
+
+@app.get("/")
+async def root():
+    """Endpoint raíz."""
+    return {
+        "message": "News Analyzer API",
+        "version": "1.0.0",
+        "status": "running"
+    }
+
+
+@app.get("/health")
+async def health():
+    """Endpoint de salud."""
+    return {"status": "healthy"}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+

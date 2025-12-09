@@ -1,0 +1,2 @@
+"""Tests para News Analyzer."""
+
