@@ -595,6 +595,166 @@ class DecisionEvaluation(Base):
         }
 
 
+class Sector(Base):
+    """Modelo de datos para sectores/temas."""
+    __tablename__ = "sectors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False, unique=True)  # Ej: "Tecnología", "Energía", "Salud"
+    category = Column(String(50), nullable=False)  # "sector", "theme", "industry"
+    keywords = Column(Text, nullable=True)  # JSON array de palabras clave
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    def to_dict(self):
+        """Convierte el modelo a diccionario."""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "category": self.category,
+            "keywords": self.keywords,
+            "description": self.description,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class AssetCatalog(Base):
+    """Catálogo de activos (tickers/ETF) mapeados a sectores."""
+    __tablename__ = "asset_catalog"
+
+    id = Column(Integer, primary_key=True, index=True)
+    symbol = Column(String(50), nullable=False, unique=True)  # Ticker/ETF symbol
+    name = Column(String(200), nullable=False)
+    asset_type = Column(String(50), nullable=False)  # "stock", "etf", "index"
+    sector_id = Column(Integer, ForeignKey("sectors.id"), nullable=False)
+    is_etf = Column(Boolean, default=False, nullable=False)
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relación
+    sector = relationship("Sector", backref="assets")
+
+    def to_dict(self):
+        """Convierte el modelo a diccionario."""
+        return {
+            "id": self.id,
+            "symbol": self.symbol,
+            "name": self.name,
+            "asset_type": self.asset_type,
+            "sector_id": self.sector_id,
+            "is_etf": self.is_etf,
+            "description": self.description,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class WatchlistItem(Base):
+    """Items en la watchlist del usuario."""
+    __tablename__ = "watchlist_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    symbol = Column(String(50), nullable=False)
+    name = Column(String(200), nullable=False)
+    asset_type = Column(String(50), nullable=False)
+    sector_id = Column(Integer, ForeignKey("sectors.id"), nullable=True)
+    added_from_news_id = Column(Integer, ForeignKey("news_items.id"), nullable=True)  # Noticia que generó la sugerencia
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relaciones
+    sector = relationship("Sector", backref="watchlist_items")
+    news_item = relationship("NewsItem", backref="watchlist_suggestions")
+
+    def to_dict(self):
+        """Convierte el modelo a diccionario."""
+        return {
+            "id": self.id,
+            "symbol": self.symbol,
+            "name": self.name,
+            "asset_type": self.asset_type,
+            "sector_id": self.sector_id,
+            "added_from_news_id": self.added_from_news_id,
+            "notes": self.notes,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class TradingRecommendation(Base):
+    """Modelo de datos para recomendaciones de trading con trazabilidad completa."""
+    __tablename__ = "trading_recommendations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    portfolio_item_id = Column(Integer, ForeignKey("portfolio_items.id"), nullable=False)
+    
+    # Origen y trazabilidad
+    source_news_id = Column(Integer, ForeignKey("news_items.id"), nullable=True)  # Noticia que originó la recomendación
+    source_news_title = Column(String(200), nullable=True)  # Título de la noticia (snapshot)
+    generated_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    
+    # Recomendación
+    action = Column(String(20), nullable=False)  # add, reduce, trim, exit, stop, watch
+    condition = Column(String(200), nullable=False)  # Condición que activa la recomendación
+    reason = Column(Text, nullable=False)  # Razón de la recomendación
+    explanation = Column(Text, nullable=True)  # Explicación detallada de por qué el umbral es relevante
+    
+    # Variables consideradas (JSON)
+    inputs = Column(Text, nullable=True)  # JSON con sentimiento, precio, volumen, sector, etc.
+    
+    # Umbrales y métricas
+    threshold_data = Column(Text, nullable=True)  # JSON con umbrales cuantitativos
+    confidence = Column(Float, nullable=False)  # Confianza (0.0-1.0)
+    priority = Column(Integer, default=1, nullable=False)  # Prioridad de la recomendación
+    
+    # Estado
+    is_active = Column(Boolean, default=True, nullable=False)  # Si la recomendación sigue activa
+    acknowledged_at = Column(DateTime, nullable=True)  # Cuándo el usuario la revisó
+    executed_at = Column(DateTime, nullable=True)  # Cuándo se ejecutó (si aplica)
+    
+    # Metadatos
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Relaciones
+    portfolio_item = relationship("PortfolioItem", backref="trading_recommendations")
+    source_news = relationship("NewsItem", backref="generated_recommendations")
+
+    def to_dict(self):
+        """Convierte el modelo a diccionario."""
+        inputs_dict = None
+        threshold_dict = None
+        
+        if self.inputs:
+            try:
+                inputs_dict = json.loads(self.inputs)
+            except (json.JSONDecodeError, TypeError):
+                inputs_dict = None
+        
+        if self.threshold_data:
+            try:
+                threshold_dict = json.loads(self.threshold_data)
+            except (json.JSONDecodeError, TypeError):
+                threshold_dict = None
+        
+        return {
+            "id": self.id,
+            "portfolio_item_id": self.portfolio_item_id,
+            "source_news_id": self.source_news_id,
+            "source_news_title": self.source_news_title,
+            "generated_at": self.generated_at.isoformat() if self.generated_at else None,
+            "action": self.action,
+            "condition": self.condition,
+            "reason": self.reason,
+            "explanation": self.explanation,
+            "inputs": inputs_dict,
+            "threshold_data": threshold_dict,
+            "confidence": self.confidence,
+            "priority": self.priority,
+            "is_active": self.is_active,
+            "acknowledged_at": self.acknowledged_at.isoformat() if self.acknowledged_at else None,
+            "executed_at": self.executed_at.isoformat() if self.executed_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 # Crear engine y sessionmaker
 engine = create_engine(
     DATABASE_URL,

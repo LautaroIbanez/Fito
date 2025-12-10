@@ -300,3 +300,4 @@ class TestNewsScoring:
         assert score_dict["components"]["age_days"] > service.obsolete_days
 
 
+

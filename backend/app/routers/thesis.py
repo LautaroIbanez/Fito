@@ -479,3 +479,4 @@ def _build_news_link_response(db: Session, link: ThesisNewsLink) -> NewsLinkResp
     )
 
 
+

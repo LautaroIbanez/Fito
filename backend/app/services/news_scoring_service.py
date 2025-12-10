@@ -274,3 +274,4 @@ class NewsScoringService:
         return scored_news
 
 
+

@@ -859,3 +859,110 @@ class PortfolioAnalysisResponse(BaseModel):
     aggregate: PortfolioAnalysisAggregate = Field(..., description="Vista agregada del análisis")
     analyzed_news_count: int = Field(..., description="Cantidad de noticias analizadas")
     generated_at: str = Field(..., description="Fecha de generación del análisis")
+
+
+# ==================== Trading Recommendations Models ====================
+
+class NewsClassificationResponse(BaseModel):
+    """Clasificación de una noticia."""
+    sentiment: str = Field(..., description="Sentimiento: positive, negative, neutral")
+    relevance: str = Field(..., description="Relevancia: high, medium, low")
+    urgency: str = Field(..., description="Urgencia: high, medium, low")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Nivel de confianza (0.0-1.0)")
+    score: float = Field(..., description="Score de relevancia")
+    explanations: Dict = Field(..., description="Explicaciones de cada clasificación")
+
+
+class TradingRecommendation(BaseModel):
+    """Recomendación de trading para un activo."""
+    recommendation_id: Optional[int] = Field(None, description="ID de la recomendación guardada en BD")
+    action: str = Field(..., description="Acción recomendada: add, reduce, trim, exit, stop, watch")
+    condition: str = Field(..., description="Condición que activa la recomendación")
+    reason: str = Field(..., description="Razón de la recomendación")
+    explanation: Optional[str] = Field(None, description="Explicación detallada de por qué el umbral es relevante")
+    threshold: Optional[Dict] = Field(None, description="Umbrales cuantitativos")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confianza en la recomendación")
+    priority: int = Field(..., description="Prioridad de la recomendación")
+    source_news_id: Optional[int] = Field(None, description="ID de la noticia que originó la recomendación")
+    source_news_title: Optional[str] = Field(None, description="Título de la noticia origen")
+    generated_at: Optional[str] = Field(None, description="Hora de generación de la recomendación")
+    inputs: Optional[Dict] = Field(None, description="Variables consideradas (sentimiento, precio, volumen, etc.)")
+
+
+class AssetRecommendationsResponse(BaseModel):
+    """Recomendaciones de trading para un activo."""
+    asset_info: Dict = Field(..., description="Información del activo")
+    key_news: List[Dict] = Field(..., description="Noticias clave relacionadas")
+    impact_summary: str = Field(..., description="Resumen del impacto de las noticias")
+    recommendations: List[TradingRecommendation] = Field(..., description="Recomendaciones de trading")
+    market_features: Dict = Field(..., description="Features de mercado (precio, volumen, ATR)")
+    overall_metrics: Dict = Field(..., description="Métricas generales (sentimiento, relevancia, urgencia)")
+    generated_at: str = Field(..., description="Fecha de generación")
+
+
+class AllRecommendationsResponse(BaseModel):
+    """Respuesta con todas las recomendaciones."""
+    recommendations: List[AssetRecommendationsResponse] = Field(..., description="Recomendaciones por activo")
+    total_assets: int = Field(..., description="Total de activos analizados")
+    generated_at: str = Field(..., description="Fecha de generación")
+
+
+# ==================== Opportunities Models ====================
+
+class OpportunityAsset(BaseModel):
+    """Oportunidad de activo fuera de cartera."""
+    symbol: str = Field(..., description="Símbolo/ticker del activo")
+    name: str = Field(..., description="Nombre del activo")
+    asset_type: str = Field(..., description="Tipo: stock, etf, index")
+    sector: str = Field(..., description="Sector/tema relacionado")
+    is_etf: bool = Field(False, description="Es un ETF")
+    impact_score: float = Field(..., ge=0.0, le=1.0, description="Puntuación de impacto (0.0-1.0)")
+    signal: str = Field(..., description="Señal: positive, negative, neutral")
+    justification: str = Field(..., description="Justificación breve de la oportunidad")
+
+
+class NewsOpportunitiesResponse(BaseModel):
+    """Oportunidades relacionadas con una noticia."""
+    news_id: int = Field(..., description="ID de la noticia")
+    news_title: Optional[str] = Field(None, description="Título de la noticia")
+    sectors_detected: List[str] = Field(default_factory=list, description="Sectores detectados")
+    themes_detected: List[str] = Field(default_factory=list, description="Temas detectados")
+    opportunities: List[OpportunityAsset] = Field(..., description="Oportunidades de activos")
+    generated_at: str = Field(..., description="Fecha de generación")
+
+
+class WatchlistItemCreate(BaseModel):
+    """Modelo para agregar item a watchlist."""
+    symbol: str = Field(..., max_length=50, description="Símbolo/ticker")
+    name: str = Field(..., max_length=200, description="Nombre del activo")
+    asset_type: str = Field(..., description="Tipo: stock, etf, index")
+    sector: Optional[str] = Field(None, description="Sector relacionado")
+    added_from_news_id: Optional[int] = Field(None, description="ID de noticia que generó la sugerencia")
+    notes: Optional[str] = Field(None, description="Notas adicionales")
+
+
+class WatchlistItemResponse(BaseModel):
+    """Modelo de respuesta para item de watchlist."""
+    id: int
+    symbol: str
+    name: str
+    asset_type: str
+    sector: Optional[str] = None
+    added_from_news_id: Optional[int] = None
+    notes: Optional[str] = None
+    created_at: str
+
+    @field_validator('created_at', mode='before')
+    @classmethod
+    def convert_datetime(cls, v):
+        if isinstance(v, datetime):
+            return v.isoformat()
+        return v
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WatchlistListResponse(BaseModel):
+    """Modelo de respuesta para lista de watchlist."""
+    items: List[WatchlistItemResponse]
+    total: int

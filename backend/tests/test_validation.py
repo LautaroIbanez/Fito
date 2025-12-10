@@ -74,3 +74,4 @@ def test_news_item_html_escaping():
     assert "&lt;script&gt;" in item.body
 
 
+

@@ -30,9 +30,61 @@ def add_standardized_data_column():
         raise
 
 
+def add_sectors_and_catalog_tables():
+    """Crea las tablas de sectores y catálogo de activos si no existen."""
+    try:
+        from app.database import Base, Sector, AssetCatalog, WatchlistItem, TradingRecommendation
+        Base.metadata.create_all(
+            bind=engine, 
+            tables=[
+                Sector.__table__, 
+                AssetCatalog.__table__, 
+                WatchlistItem.__table__,
+                TradingRecommendation.__table__
+            ]
+        )
+        logger.info("Tablas de sectores, catálogo, watchlist y recomendaciones creadas/verificadas")
+    except Exception as e:
+        logger.error(f"Error creando tablas de sectores/catálogo: {e}", exc_info=True)
+        raise
+
+
+def init_catalog_data():
+    """Inicializa datos del catálogo si está vacío."""
+    try:
+        from app.database import Sector, AssetCatalog
+        from app.scripts.init_catalog import init_catalog
+        
+        # Verificar si ya hay sectores
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT COUNT(*) FROM sectors"))
+            sector_count = result.scalar()
+            
+            if sector_count == 0:
+                logger.info("Inicializando catálogo de sectores y activos...")
+                db = SessionLocal()
+                try:
+                    init_catalog(db)
+                    logger.info("Catálogo inicializado exitosamente")
+                finally:
+                    db.close()
+            else:
+                logger.debug(f"Catálogo ya tiene {sector_count} sectores, omitiendo inicialización")
+    except Exception as e:
+        logger.warning(f"Error inicializando catálogo (puede ser normal si las tablas no existen aún): {e}")
+
+
 def run_migrations():
     """Ejecuta todas las migraciones pendientes."""
     logger.info("Ejecutando migraciones de base de datos...")
     add_standardized_data_column()
+    add_sectors_and_catalog_tables()
+    
+    # Intentar inicializar catálogo (puede fallar si las tablas no existen aún)
+    try:
+        init_catalog_data()
+    except Exception as e:
+        logger.debug(f"No se pudo inicializar catálogo aún: {e}")
+    
     logger.info("Migraciones completadas")
 

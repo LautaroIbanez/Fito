@@ -58,3 +58,4 @@ def test_emojis_preserved_after_sanitization():
     assert "\x00" not in item.body
 
 
+
