@@ -2,7 +2,12 @@ import { useState, useEffect } from 'react'
 import { suggestionsApi, AssetSuggestion } from '../services/api'
 import './AssetSuggestions.css'
 
-export default function AssetSuggestions() {
+interface AssetSuggestionsProps {
+  autoRefresh?: boolean
+  refreshTrigger?: number
+}
+
+export default function AssetSuggestions({ autoRefresh = false, refreshTrigger = 0 }: AssetSuggestionsProps) {
   const [suggestions, setSuggestions] = useState<AssetSuggestion[]>([])
   const [portfolioValue, setPortfolioValue] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -19,6 +24,13 @@ export default function AssetSuggestions() {
   useEffect(() => {
     loadSuggestions()
   }, [])
+
+  // Auto-refrescar cuando cambia el trigger o cuando autoRefresh está activo
+  useEffect(() => {
+    if (autoRefresh || refreshTrigger > 0) {
+      loadSuggestions()
+    }
+  }, [refreshTrigger, autoRefresh])
 
   const loadSuggestions = async () => {
     try {

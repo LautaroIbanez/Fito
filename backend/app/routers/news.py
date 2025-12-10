@@ -9,10 +9,12 @@ import json
 from app.database import get_db, NewsItem, PortfolioItem
 from app.models import (
     NewsItemCreate, NewsItemResponse, NewsListResponse, NewsItemStandardizedCreate,
-    StandardizedNewsData, PortfolioItemResponse
+    StandardizedNewsData, PortfolioItemResponse, SituationSummaryResponse
 )
 from app.services.news_scoring_service import NewsScoringService
 from app.services.news_preprocessing_service import NewsPreprocessingService
+from app.services.situation_summary_service import SituationSummaryService
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/news", tags=["news"])
@@ -255,5 +257,55 @@ async def clear_all_news(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error interno al limpiar las noticias"
+        )
+
+
+@router.get("/summary", response_model=SituationSummaryResponse, status_code=status.HTTP_200_OK)
+async def get_situation_summary(
+    db: Session = Depends(get_db)
+):
+    """
+    Genera un resumen conciso de la situación actual del mercado basado en las noticias almacenadas.
+    
+    El resumen se genera automáticamente desde las noticias más recientes y proporciona
+    una visión general de la situación actual del mercado.
+    """
+    try:
+        # Obtener todas las noticias
+        news_items = db.query(NewsItem).order_by(desc(NewsItem.created_at)).all()
+        
+        if not news_items:
+            # Retornar respuesta vacía sin error
+            return SituationSummaryResponse(
+                summary="",
+                news_count=0,
+                recent_news_count=0,
+                generated_at=datetime.now(timezone.utc).isoformat(),
+                has_content=False,
+                tokens_used=None
+            )
+        
+        # Convertir a modelos de respuesta
+        news_responses = [NewsItemResponse.model_validate(item) for item in news_items]
+        
+        # Generar resumen
+        summary_service = SituationSummaryService()
+        summary_result = summary_service.generate_summary(news_responses)
+        
+        logger.info(f"Resumen de situación generado para {summary_result['news_count']} noticias")
+        
+        return SituationSummaryResponse(**summary_result)
+        
+    except ValueError as e:
+        logger.warning(f"Error de validación al generar resumen: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error inesperado al generar resumen: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error interno al generar resumen: {str(e)}"
         )
 

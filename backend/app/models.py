@@ -966,3 +966,15 @@ class WatchlistListResponse(BaseModel):
     """Modelo de respuesta para lista de watchlist."""
     items: List[WatchlistItemResponse]
     total: int
+
+
+# ==================== Situation Summary Models ====================
+
+class SituationSummaryResponse(BaseModel):
+    """Respuesta con resumen de situación actual."""
+    summary: str = Field(..., description="Resumen de la situación actual del mercado")
+    news_count: int = Field(..., description="Total de noticias analizadas")
+    recent_news_count: int = Field(..., description="Noticias recientes consideradas")
+    generated_at: str = Field(..., description="Fecha de generación del resumen")
+    has_content: bool = Field(..., description="Si el resumen tiene contenido")
+    tokens_used: Optional[int] = Field(None, description="Tokens utilizados en la generación")

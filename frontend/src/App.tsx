@@ -3,14 +3,8 @@ import NewsForm from './components/NewsForm'
 import NewsList from './components/NewsList'
 import AnalysisView from './components/AnalysisView'
 import PortfolioTable from './components/PortfolioTable'
-import RiskDashboard from './components/RiskDashboard'
-import AlertTriggers from './components/AlertTriggers'
-import AlertHistory from './components/AlertHistory'
-import BacktestManager from './components/BacktestManager'
 import AssetSuggestions from './components/AssetSuggestions'
-import AssetThesis from './components/AssetThesis'
-import DynamicLimits from './components/DynamicLimits'
-import DecisionLog from './components/DecisionLog'
+import SituationSummary from './components/SituationSummary'
 import { newsApi, NewsItem, AnalysisResponse } from './services/api'
 import './App.css'
 
@@ -140,21 +134,17 @@ function App() {
               if (analysis) {
                 setAnalysis(null)
               }
-              // Refrescar dashboard de riesgo
+              // Trigger refresh de sugerencias
               setPortfolioRefreshTrigger(prev => prev + 1)
             }} />
-            <RiskDashboard refreshTrigger={portfolioRefreshTrigger} />
-            <AlertTriggers />
-            <AlertHistory />
-            <BacktestManager />
-            <AssetSuggestions />
-            <DynamicLimits />
-            <DecisionLog />
-            <AssetThesis onUpdate={() => {
-              // Refrescar si es necesario
-            }} />
+            <SituationSummary autoRefresh={false} />
+            <AssetSuggestions autoRefresh={false} refreshTrigger={portfolioRefreshTrigger} />
             <NewsForm
-              onSubmit={handleNewsSubmit}
+              onSubmit={async (title, body, source) => {
+                await handleNewsSubmit(title, body, source)
+                // Trigger refresh de sugerencias después de agregar noticia
+                setPortfolioRefreshTrigger(prev => prev + 1)
+              }}
               isSubmitting={state === 'saving'}
             />
             <NewsList

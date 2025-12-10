@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 
 from app.database import NewsItem, PortfolioItem, AssetSuggestion
-from app.models import NewsItemResponse, PortfolioItemResponse
+from app.models import NewsItemResponse, PortfolioItemResponse, StandardizedNewsData
 from app.services.news_scoring_service import NewsScoringService
 from app.config import (
     SUGGESTIONS_MIN_NEWS_SCORE,
@@ -55,6 +55,15 @@ class AssetSuggestionsService:
         for news_item in recent_news:
             news_response = NewsItemResponse.model_validate(news_item)
             
+            # Intentar usar datos estandarizados si están disponibles
+            standardized_data = None
+            if news_item.standardized_data:
+                try:
+                    standardized_dict = json.loads(news_item.standardized_data)
+                    standardized_data = StandardizedNewsData(**standardized_dict)
+                except (json.JSONDecodeError, TypeError, Exception):
+                    standardized_data = None
+            
             # Calcular score
             scored_news = self.scoring_service.score_and_sort_news([news_response], portfolio_items)
             if not scored_news:
@@ -66,8 +75,14 @@ class AssetSuggestionsService:
             if score < SUGGESTIONS_MIN_NEWS_SCORE:
                 continue
             
-            # Buscar tickers en título y cuerpo
+            # Buscar tickers en título y cuerpo, y también en datos estandarizados
             text_to_search = f"{news_item.title or ''} {news_item.body}".upper()
+            
+            # Si hay datos estandarizados, usar también las empresas clave mencionadas
+            if standardized_data and standardized_data.key_people_companies:
+                companies_text = " ".join(standardized_data.key_people_companies).upper()
+                text_to_search += f" {companies_text}"
+            
             matches = ticker_pattern.findall(text_to_search)
             
             for ticker_match in matches:
@@ -85,12 +100,22 @@ class AssetSuggestionsService:
                         "asset_type": "acciones",  # Por defecto
                         "news_count": 0,
                         "total_score": 0.0,
-                        "news_ids": []
+                        "news_ids": [],
+                        "sentiments": [],
+                        "keywords": []
                     }
                 
                 assets_found[symbol]["news_count"] += 1
                 assets_found[symbol]["total_score"] += score
                 assets_found[symbol]["news_ids"].append(news_item.id)
+                
+                # Guardar información de sentimiento si está disponible
+                if standardized_data:
+                    assets_found[symbol]["sentiments"].append(standardized_data.sentiment)
+                    
+                    # Guardar keywords/sectores si están disponibles
+                    if standardized_data.key_people_companies:
+                        assets_found[symbol]["keywords"].extend(standardized_data.key_people_companies)
         
         # Calcular score promedio y filtrar
         filtered_assets = {}
@@ -159,41 +184,59 @@ class AssetSuggestionsService:
         symbol: str,
         correlation: Optional[float],
         news_score: float,
-        portfolio_items: List[PortfolioItemResponse]
+        portfolio_items: List[PortfolioItemResponse],
+        sentiments: List[str] = None,
+        keywords: List[str] = None
     ) -> Tuple[str, str]:
         """
-        Determina el motivo de la sugerencia.
+        Determina el motivo de la sugerencia mejorado con datos de sentimiento.
         
         Returns:
             Tuple[str, str]: (reason_code, reason_description)
         """
+        sentiments = sentiments or []
+        keywords = keywords or []
+        
+        # Analizar sentimiento predominante
+        bullish_count = sum(1 for s in sentiments if s.lower() in ["bullish", "positive"])
+        bearish_count = sum(1 for s in sentiments if s.lower() in ["bearish", "negative"])
+        sentiment_context = ""
+        if bullish_count > bearish_count:
+            sentiment_context = " Sentimiento predominantemente positivo en noticias recientes."
+        elif bearish_count > bullish_count:
+            sentiment_context = " Sentimiento predominantemente negativo en noticias recientes."
+        
+        # Motivo: Momentum (mejorado con sentimiento)
+        if news_score >= 5.0:
+            momentum_desc = f"Alta relevancia en noticias recientes (score: {news_score:.2f})."
+            if sentiment_context:
+                momentum_desc += sentiment_context
+            if keywords:
+                momentum_desc += f" Sectores/temas relacionados: {', '.join(keywords[:3])}."
+            return ("momentum", momentum_desc + " Posible momentum positivo.")
+        
         # Motivo: Diversificación
         if correlation is not None and correlation < 0.3:
-            return (
-                "diversification",
-                f"Baja correlación ({correlation:.2f}) con la cartera actual. Ayuda a reducir riesgo mediante diversificación."
-            )
+            diversification_desc = f"Baja correlación ({correlation:.2f}) con la cartera actual."
+            if sentiment_context:
+                diversification_desc += sentiment_context
+            return ("diversification", diversification_desc + " Ayuda a reducir riesgo mediante diversificación.")
         
         # Motivo: Hedge
         portfolio_types = [item.asset_type.lower() for item in portfolio_items]
         if "acciones" in portfolio_types and correlation is not None and correlation < 0.5:
-            return (
-                "hedge",
-                f"Correlación moderada ({correlation:.2f}). Puede servir como hedge ante movimientos del mercado de acciones."
-            )
+            hedge_desc = f"Correlación moderada ({correlation:.2f})."
+            if sentiment_context:
+                hedge_desc += sentiment_context
+            return ("hedge", hedge_desc + " Puede servir como hedge ante movimientos del mercado de acciones.")
         
-        # Motivo: Momentum
-        if news_score >= 5.0:
-            return (
-                "momentum",
-                f"Alta relevancia en noticias recientes (score: {news_score:.2f}). Posible momentum positivo."
-            )
-        
-        # Default: Diversificación
-        return (
-            "diversification",
-            "Activo identificado en noticias recientes con relevancia suficiente para considerar."
-        )
+        # Default: Diversificación (mejorado)
+        default_desc = "Activo identificado en noticias recientes con relevancia suficiente para considerar."
+        if sentiment_context:
+            default_desc += sentiment_context
+        if keywords:
+            default_desc += f" Sectores/temas relacionados: {', '.join(keywords[:2])}."
+        return ("diversification", default_desc)
     
     def calculate_position_size(
         self,
@@ -336,12 +379,17 @@ class AssetSuggestionsService:
             if confidence < min_confidence:
                 continue
             
-            # Determinar motivo
+            # Determinar motivo (mejorado con datos de sentimiento)
+            sentiments = asset_data.get("sentiments", [])
+            keywords = asset_data.get("keywords", [])
+            
             reason, reason_description = self.determine_reason(
                 symbol,
                 correlation,
                 asset_data["avg_score"],
-                portfolio_items
+                portfolio_items,
+                sentiments=sentiments,
+                keywords=keywords
             )
             
             # Calcular tamaño de posición
