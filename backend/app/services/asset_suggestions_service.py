@@ -377,3 +377,4 @@ class AssetSuggestionsService:
         
         return suggestions
 
+

@@ -54,3 +54,4 @@ Después de actualizar la key, intenta generar un análisis nuevamente. Si el er
 ⚠️ **IMPORTANTE**: El archivo `app/config.py` está en `.gitignore` para que no se suba al repositorio. 
 Nunca compartas tu API key públicamente.
 
+

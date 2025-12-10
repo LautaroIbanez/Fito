@@ -46,3 +46,4 @@ htmlcov/
 # Config file with API key (should not be committed)
 backend/app/config.py
 
+

@@ -237,3 +237,4 @@ async def get_limit_for_item(
             detail="Error interno al obtener límite"
         )
 
+

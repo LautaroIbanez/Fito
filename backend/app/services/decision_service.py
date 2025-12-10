@@ -347,3 +347,4 @@ class DecisionService:
             'avg_price_change_pct': round(avg_price_change, 2),
         }
 
+

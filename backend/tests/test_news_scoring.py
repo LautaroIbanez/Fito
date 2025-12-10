@@ -299,3 +299,4 @@ class TestNewsScoring:
         assert score_dict["components"]["is_obsolete"] == True
         assert score_dict["components"]["age_days"] > service.obsolete_days
 
+

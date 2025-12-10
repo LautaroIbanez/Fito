@@ -3,6 +3,7 @@ from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, F
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
+import json
 from app.config import DATABASE_URL
 
 Base = declarative_base()
@@ -17,15 +18,25 @@ class NewsItem(Base):
     body = Column(Text, nullable=False)
     source = Column(String(100), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    # Standardized data stored as JSON string (SQLite doesn't have native JSON)
+    standardized_data = Column(Text, nullable=True)
 
     def to_dict(self):
         """Convierte el modelo a diccionario."""
+        standardized = None
+        if self.standardized_data:
+            try:
+                standardized = json.loads(self.standardized_data)
+            except (json.JSONDecodeError, TypeError):
+                standardized = None
+        
         return {
             "id": self.id,
             "title": self.title,
             "body": self.body,
             "source": self.source,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "standardized_data": standardized,
         }
 
 

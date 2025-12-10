@@ -397,3 +397,4 @@ class TestRiskDashboard:
         assert dashboard["volatility"]["annual_volatility"] > 0
         assert dashboard["var"]["var_30d_95"] > 0
 
+

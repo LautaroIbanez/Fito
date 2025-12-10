@@ -25,6 +25,14 @@ logger = logging.getLogger(__name__)
 init_db()
 logger.info("Base de datos inicializada")
 
+# Ejecutar migraciones
+try:
+    from app.migrations import run_migrations
+    run_migrations()
+except Exception as e:
+    logger.error(f"Error ejecutando migraciones: {e}", exc_info=True)
+    # Continuar aunque falle la migración para no bloquear el inicio
+
 # Rate limiter
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(

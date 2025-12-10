@@ -343,3 +343,4 @@ async def get_result(
             detail="Error interno al obtener el resultado"
         )
 
+

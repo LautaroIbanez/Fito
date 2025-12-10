@@ -57,3 +57,4 @@ def test_emojis_preserved_after_sanitization():
     # Los caracteres de control deben ser eliminados
     assert "\x00" not in item.body
 
+

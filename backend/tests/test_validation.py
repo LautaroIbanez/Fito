@@ -73,3 +73,4 @@ def test_news_item_html_escaping():
     assert "<script>" not in item.body
     assert "&lt;script&gt;" in item.body
 
+

@@ -4,13 +4,76 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List
 import logging
+import json
 
 from app.database import get_db, NewsItem, PortfolioItem
-from app.models import NewsItemCreate, NewsItemResponse, NewsListResponse
+from app.models import (
+    NewsItemCreate, NewsItemResponse, NewsListResponse, NewsItemStandardizedCreate,
+    StandardizedNewsData, PortfolioItemResponse
+)
 from app.services.news_scoring_service import NewsScoringService
+from app.services.news_preprocessing_service import NewsPreprocessingService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/news", tags=["news"])
+
+
+@router.post("/standardize", response_model=NewsItemResponse, status_code=status.HTTP_201_CREATED)
+async def save_standardized_news(
+    request: Request,
+    news_item: NewsItemStandardizedCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Guarda una noticia estandarizada.
+    
+    Aplica un prompt de primera pasada al artículo para extraer:
+    - Título, fecha de publicación, fuente
+    - Resumen de 3-5 bullets (máx 50 palabras cada uno)
+    - Personas/empresas clave
+    - Números/métricas citadas
+    - Sentimiento (bullish/bearish/neutral)
+    - Una línea "por qué importa" desde perspectiva de inversor
+    
+    Los datos estandarizados se guardan en formato JSON para consumo uniforme por prompts posteriores.
+    """
+    try:
+        # Estandarizar la noticia usando OpenAI
+        preprocessing_service = NewsPreprocessingService()
+        standardized_data = preprocessing_service.standardize_news(news_item.article_text)
+        
+        # Crear el item de noticia con datos estandarizados
+        db_item = NewsItem(
+            title=standardized_data.title,
+            body=news_item.article_text,  # Guardar el texto original completo
+            source=standardized_data.source,
+            standardized_data=json.dumps(standardized_data.model_dump(), ensure_ascii=False)
+        )
+        
+        db.add(db_item)
+        db.commit()
+        db.refresh(db_item)
+        
+        logger.info(f"Noticia estandarizada creada: ID {db_item.id}, título: {standardized_data.title}")
+        
+        # Construir respuesta con datos estandarizados
+        response = NewsItemResponse.model_validate(db_item)
+        response.standardized_data = standardized_data
+        
+        return response
+        
+    except ValueError as e:
+        logger.warning(f"Error de validación al estandarizar noticia: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error inesperado al estandarizar noticia: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error interno al estandarizar la noticia: {str(e)}"
+        )
 
 
 @router.post("", response_model=NewsItemResponse, status_code=status.HTTP_201_CREATED)
@@ -36,7 +99,18 @@ async def create_news(
         db.refresh(db_item)
         
         logger.info(f"Noticia creada: ID {db_item.id}")
-        return NewsItemResponse.model_validate(db_item)
+        
+        # Parsear standardized_data si existe
+        response = NewsItemResponse.model_validate(db_item)
+        if db_item.standardized_data:
+            try:
+                standardized_dict = json.loads(db_item.standardized_data)
+                response.standardized_data = StandardizedNewsData(**standardized_dict)
+            except (json.JSONDecodeError, Exception) as e:
+                logger.warning(f"Error parseando standardized_data para noticia {db_item.id}: {e}")
+                response.standardized_data = None
+        
+        return response
         
     except ValueError as e:
         logger.warning(f"Error de validación al crear noticia: {e}")
@@ -73,12 +147,22 @@ async def list_news(
         
         # Obtener cartera para scoring
         portfolio_items_db = db.query(PortfolioItem).all()
-        from app.models import PortfolioItemResponse
         portfolio_items = [PortfolioItemResponse.model_validate(item) for item in portfolio_items_db]
         
         # Calcular scores y ordenar
         scoring_service = NewsScoringService()
-        news_items = [NewsItemResponse.model_validate(item) for item in all_items]
+        news_items = []
+        for item in all_items:
+            response_item = NewsItemResponse.model_validate(item)
+            # Parsear standardized_data si existe
+            if item.standardized_data:
+                try:
+                    standardized_dict = json.loads(item.standardized_data)
+                    response_item.standardized_data = StandardizedNewsData(**standardized_dict)
+                except (json.JSONDecodeError, Exception) as e:
+                    logger.warning(f"Error parseando standardized_data para noticia {item.id}: {e}")
+                    response_item.standardized_data = None
+            news_items.append(response_item)
         
         if sort_by == "score" and portfolio_items:
             # Ordenar por score

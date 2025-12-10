@@ -310,3 +310,4 @@ async def get_statistics(
             detail="Error interno al obtener estadísticas"
         )
 
+

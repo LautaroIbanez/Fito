@@ -1,6 +1,6 @@
 """Modelos Pydantic para validación de requests/responses."""
 from pydantic import BaseModel, Field, field_validator, ConfigDict
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from datetime import datetime
 import re
 
@@ -8,7 +8,11 @@ import re
 try:
     from app.config import (
         THESIS_MIN_LENGTH, THESIS_MAX_LENGTH,
-        DECISION_MIN_REASON_LENGTH, DECISION_DEFAULT_EVALUATION_WINDOW_DAYS
+        DECISION_MIN_REASON_LENGTH, DECISION_DEFAULT_EVALUATION_WINDOW_DAYS,
+        STANDARDIZED_NEWS_MAX_BULLET_LENGTH, STANDARDIZED_NEWS_MIN_BULLETS,
+        STANDARDIZED_NEWS_MAX_BULLETS, STANDARDIZED_NEWS_SENTIMENT_ENUM,
+        PORTFOLIO_ANALYSIS_CONFIDENCE_LEVELS, PORTFOLIO_ANALYSIS_ACTIONS,
+        PORTFOLIO_ANALYSIS_MAX_FOLLOWUP_QUESTIONS
     )
 except ImportError:
     # Valores por defecto si no se importan correctamente
@@ -16,6 +20,13 @@ except ImportError:
     THESIS_MAX_LENGTH = 5000
     DECISION_MIN_REASON_LENGTH = 20
     DECISION_DEFAULT_EVALUATION_WINDOW_DAYS = 30
+    STANDARDIZED_NEWS_MAX_BULLET_LENGTH = 50
+    STANDARDIZED_NEWS_MIN_BULLETS = 3
+    STANDARDIZED_NEWS_MAX_BULLETS = 5
+    STANDARDIZED_NEWS_SENTIMENT_ENUM = ["bullish", "bearish", "neutral"]
+    PORTFOLIO_ANALYSIS_CONFIDENCE_LEVELS = ["high", "med", "low"]
+    PORTFOLIO_ANALYSIS_ACTIONS = ["watch", "add", "trim", "exit"]
+    PORTFOLIO_ANALYSIS_MAX_FOLLOWUP_QUESTIONS = 2
 
 
 class NewsItemCreate(BaseModel):
@@ -90,6 +101,44 @@ class NewsItemCreate(BaseModel):
         return v
 
 
+class StandardizedNewsData(BaseModel):
+    """Modelo para datos estandarizados de noticias."""
+    title: str = Field(..., description="Título extraído de la noticia")
+    publication_date: Optional[str] = Field(None, description="Fecha de publicación (ISO format)")
+    source: Optional[str] = Field(None, description="Fuente de la noticia")
+    summary_bullets: List[str] = Field(..., min_length=STANDARDIZED_NEWS_MIN_BULLETS, max_length=STANDARDIZED_NEWS_MAX_BULLETS, 
+                                       description="3-5 bullets de resumen (máx 50 palabras cada uno)")
+    key_people_companies: List[str] = Field(default_factory=list, description="Personas y empresas clave mencionadas")
+    quoted_numbers_metrics: List[str] = Field(default_factory=list, description="Números y métricas citadas")
+    sentiment: str = Field(..., description="Sentimiento: bullish, bearish, o neutral")
+    why_it_matters: str = Field(..., description="Una línea explicando por qué importa desde perspectiva de inversor")
+
+    @field_validator('sentiment')
+    @classmethod
+    def validate_sentiment(cls, v):
+        """Valida que el sentimiento sea uno de los valores permitidos."""
+        v_lower = v.lower()
+        if v_lower not in [s.lower() for s in STANDARDIZED_NEWS_SENTIMENT_ENUM]:
+            raise ValueError(f"Sentimiento debe ser uno de: {', '.join(STANDARDIZED_NEWS_SENTIMENT_ENUM)}")
+        return v_lower
+
+    @field_validator('summary_bullets')
+    @classmethod
+    def validate_bullets(cls, v):
+        """Valida que cada bullet tenga máximo 50 palabras."""
+        for bullet in v:
+            word_count = len(bullet.split())
+            if word_count > STANDARDIZED_NEWS_MAX_BULLET_LENGTH:
+                raise ValueError(f"Cada bullet debe tener máximo {STANDARDIZED_NEWS_MAX_BULLET_LENGTH} palabras. "
+                               f"Bullet con {word_count} palabras encontrado: {bullet[:50]}...")
+        return v
+
+
+class NewsItemStandardizedCreate(BaseModel):
+    """Modelo para crear una noticia con estandarización."""
+    article_text: str = Field(..., min_length=200, max_length=10000, description="Texto completo del artículo a estandarizar")
+
+
 class NewsItemResponse(BaseModel):
     """Modelo de respuesta para una noticia."""
     id: int
@@ -100,6 +149,7 @@ class NewsItemResponse(BaseModel):
     score: Optional[float] = None
     score_components: Optional[Dict] = None
     is_obsolete: Optional[bool] = None
+    standardized_data: Optional[StandardizedNewsData] = None
 
     @field_validator('created_at', mode='before')
     @classmethod
@@ -743,3 +793,69 @@ class AnalysisResponse(BaseModel):
     portfolio_count: int
     generated_at: str
     version: str  # Timestamp de cuando se generó
+
+
+# ==================== Portfolio Analysis Models ====================
+
+class NewsItemAnalysis(BaseModel):
+    """Análisis de un item de noticia individual."""
+    news_id: int = Field(..., description="ID de la noticia analizada")
+    news_title: str = Field(..., description="Título de la noticia")
+    thesis_impact: str = Field(..., description="Impacto en la tesis de inversión")
+    risk_flags: List[str] = Field(default_factory=list, description="Banderas de riesgo identificadas")
+    confidence_level: str = Field(..., description="Nivel de confianza: high, med, o low")
+    next_action: str = Field(..., description="Próxima acción recomendada: watch, add, trim, o exit")
+    followup_questions: List[str] = Field(..., max_length=PORTFOLIO_ANALYSIS_MAX_FOLLOWUP_QUESTIONS, 
+                                          description="1-2 preguntas de seguimiento para diligencia")
+
+    @field_validator('confidence_level')
+    @classmethod
+    def validate_confidence(cls, v):
+        """Valida que el nivel de confianza sea uno de los valores permitidos."""
+        v_lower = v.lower()
+        valid_levels = [level.lower() for level in PORTFOLIO_ANALYSIS_CONFIDENCE_LEVELS]
+        if v_lower not in valid_levels:
+            raise ValueError(f"Confidence level debe ser uno de: {', '.join(PORTFOLIO_ANALYSIS_CONFIDENCE_LEVELS)}")
+        return v_lower
+
+    @field_validator('next_action')
+    @classmethod
+    def validate_action(cls, v):
+        """Valida que la acción sea una de las permitidas."""
+        v_lower = v.lower()
+        valid_actions = [action.lower() for action in PORTFOLIO_ANALYSIS_ACTIONS]
+        if v_lower not in valid_actions:
+            raise ValueError(f"Next action debe ser una de: {', '.join(PORTFOLIO_ANALYSIS_ACTIONS)}")
+        return v_lower
+
+    @field_validator('followup_questions')
+    @classmethod
+    def validate_followup_questions(cls, v):
+        """Valida que haya entre 1 y 2 preguntas."""
+        if not v or len(v) == 0:
+            raise ValueError("Se requiere al menos una pregunta de seguimiento")
+        if len(v) > PORTFOLIO_ANALYSIS_MAX_FOLLOWUP_QUESTIONS:
+            raise ValueError(f"Máximo {PORTFOLIO_ANALYSIS_MAX_FOLLOWUP_QUESTIONS} preguntas de seguimiento permitidas")
+        return [q.strip() for q in v if q.strip()]
+
+
+class PortfolioAnalysisAggregate(BaseModel):
+    """Vista agregada del análisis de cartera."""
+    top_3_opportunities: List[str] = Field(..., min_length=1, max_length=3, 
+                                           description="Top 3 oportunidades identificadas")
+    top_3_risks: List[str] = Field(..., min_length=1, max_length=3, 
+                                   description="Top 3 riesgos identificados")
+    market_read: str = Field(..., description="Lectura del mercado en un párrafo")
+
+
+class PortfolioAnalysisRequest(BaseModel):
+    """Modelo para solicitar análisis de cartera."""
+    news_ids: Optional[List[int]] = Field(None, description="IDs específicos de noticias a analizar. Si es None, analiza todas las estandarizadas")
+
+
+class PortfolioAnalysisResponse(BaseModel):
+    """Modelo de respuesta para análisis de cartera."""
+    items: List[NewsItemAnalysis] = Field(..., description="Análisis por item de noticia")
+    aggregate: PortfolioAnalysisAggregate = Field(..., description="Vista agregada del análisis")
+    analyzed_news_count: int = Field(..., description="Cantidad de noticias analizadas")
+    generated_at: str = Field(..., description="Fecha de generación del análisis")

@@ -226,3 +226,4 @@ async def dismiss_suggestion(
             detail="Error interno al descartar la sugerencia"
         )
 
+

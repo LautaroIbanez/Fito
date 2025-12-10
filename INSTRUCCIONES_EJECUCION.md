@@ -170,3 +170,4 @@ npm run dev
    - Abre `http://localhost:3001` en el navegador
    - Deberías ver la interfaz sin errores
 
+
