@@ -5,8 +5,9 @@ from sqlalchemy import desc
 from typing import List
 import logging
 
-from app.database import get_db, NewsItem
+from app.database import get_db, NewsItem, PortfolioItem
 from app.models import NewsItemCreate, NewsItemResponse, NewsListResponse
+from app.services.news_scoring_service import NewsScoringService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/news", tags=["news"])
@@ -55,19 +56,49 @@ async def create_news(
 async def list_news(
     skip: int = 0,
     limit: int = 100,
+    sort_by: str = "score",  # "score" o "date"
     db: Session = Depends(get_db)
 ):
     """
-    Lista todas las noticias ordenadas por fecha descendente.
+    Lista todas las noticias ordenadas por score (default) o fecha descendente.
     
     Soporta paginación con skip y limit.
+    Ordena por score de relevancia cuando sort_by="score" (default).
     """
     try:
         total = db.query(NewsItem).count()
-        items = db.query(NewsItem).order_by(desc(NewsItem.created_at)).offset(skip).limit(limit).all()
+        
+        # Obtener todas las noticias
+        all_items = db.query(NewsItem).all()
+        
+        # Obtener cartera para scoring
+        portfolio_items_db = db.query(PortfolioItem).all()
+        from app.models import PortfolioItemResponse
+        portfolio_items = [PortfolioItemResponse.model_validate(item) for item in portfolio_items_db]
+        
+        # Calcular scores y ordenar
+        scoring_service = NewsScoringService()
+        news_items = [NewsItemResponse.model_validate(item) for item in all_items]
+        
+        if sort_by == "score" and portfolio_items:
+            # Ordenar por score
+            scored_news = scoring_service.score_and_sort_news(news_items, portfolio_items)
+            sorted_items = [item for item, score_dict in scored_news]
+            
+            # Agregar score a cada item
+            for item, score_dict in scored_news:
+                item.score = score_dict["score"]
+                item.score_components = score_dict["components"]
+                item.is_obsolete = score_dict["components"]["is_obsolete"]
+        else:
+            # Ordenar por fecha (comportamiento original)
+            sorted_items = sorted(news_items, key=lambda x: x.created_at, reverse=True)
+        
+        # Aplicar paginación
+        paginated_items = sorted_items[skip:skip + limit]
         
         return NewsListResponse(
-            items=[NewsItemResponse.model_validate(item) for item in items],
+            items=paginated_items,
             total=total
         )
     except Exception as e:

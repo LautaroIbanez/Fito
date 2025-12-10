@@ -3,6 +3,14 @@ import NewsForm from './components/NewsForm'
 import NewsList from './components/NewsList'
 import AnalysisView from './components/AnalysisView'
 import PortfolioTable from './components/PortfolioTable'
+import RiskDashboard from './components/RiskDashboard'
+import AlertTriggers from './components/AlertTriggers'
+import AlertHistory from './components/AlertHistory'
+import BacktestManager from './components/BacktestManager'
+import AssetSuggestions from './components/AssetSuggestions'
+import AssetThesis from './components/AssetThesis'
+import DynamicLimits from './components/DynamicLimits'
+import DecisionLog from './components/DecisionLog'
 import { newsApi, NewsItem, AnalysisResponse } from './services/api'
 import './App.css'
 
@@ -14,6 +22,7 @@ function App() {
   const [state, setState] = useState<AppState>('idle')
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [portfolioRefreshTrigger, setPortfolioRefreshTrigger] = useState(0)
 
   // Cargar noticias al iniciar
   useEffect(() => {
@@ -23,7 +32,7 @@ function App() {
   const loadNews = async () => {
     try {
       setState('loading')
-      const items = await newsApi.list()
+      const items = await newsApi.list('score')  // Ordenar por score por defecto
       setNewsItems(items)
       setState('idle')
     } catch (err: any) {
@@ -131,6 +140,18 @@ function App() {
               if (analysis) {
                 setAnalysis(null)
               }
+              // Refrescar dashboard de riesgo
+              setPortfolioRefreshTrigger(prev => prev + 1)
+            }} />
+            <RiskDashboard refreshTrigger={portfolioRefreshTrigger} />
+            <AlertTriggers />
+            <AlertHistory />
+            <BacktestManager />
+            <AssetSuggestions />
+            <DynamicLimits />
+            <DecisionLog />
+            <AssetThesis onUpdate={() => {
+              // Refrescar si es necesario
             }} />
             <NewsForm
               onSubmit={handleNewsSubmit}

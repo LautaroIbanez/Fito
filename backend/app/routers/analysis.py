@@ -8,6 +8,7 @@ from datetime import datetime
 from app.database import get_db, NewsItem, PortfolioItem
 from app.models import AnalysisRequest, AnalysisResponse
 from app.services.openai_service import OpenAIService
+from app.services.news_scoring_service import NewsScoringService
 from app.models import NewsItemResponse, PortfolioItemResponse
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,18 @@ async def generate_analysis(
         # Obtener items de cartera
         portfolio_items = db.query(PortfolioItem).order_by(desc(PortfolioItem.updated_at)).all()
         portfolio_responses = [PortfolioItemResponse.model_validate(item) for item in portfolio_items] if portfolio_items else []
+        
+        # Calcular scores y ordenar noticias por relevancia
+        scoring_service = NewsScoringService()
+        scored_news = scoring_service.score_and_sort_news(news_responses, portfolio_responses if portfolio_responses else None)
+        # Usar noticias ordenadas por score
+        news_responses = [item for item, score_dict in scored_news]
+        
+        # Agregar scores a los items
+        for item, score_dict in scored_news:
+            item.score = score_dict["score"]
+            item.score_components = score_dict["components"]
+            item.is_obsolete = score_dict["components"]["is_obsolete"]
         
         # Generar análisis con OpenAI (incluyendo cartera)
         logger.info(f"Generando análisis para {len(news_responses)} noticias y {len(portfolio_responses)} items de cartera")

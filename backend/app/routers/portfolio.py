@@ -10,6 +10,7 @@ from app.models import (
     PortfolioItemResponse,
     PortfolioListResponse
 )
+from app.services.risk_service import RiskService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
@@ -161,5 +162,40 @@ async def delete_portfolio_item(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error interno al eliminar el item de cartera"
+        )
+
+
+@router.get("/risk-dashboard")
+async def get_risk_dashboard(
+    top_n: int = 5,
+    db: Session = Depends(get_db)
+):
+    """
+    Calcula y retorna métricas de riesgo y concentración del portafolio.
+    
+    Incluye:
+    - Exposición por activo y por sector
+    - Top N concentraciones
+    - Volatilidad estimada (30 y 90 días)
+    - Value at Risk (VaR) estimado (30 y 90 días, 95% y 99% confianza)
+    """
+    try:
+        # Obtener todos los items de la cartera
+        portfolio_items_db = db.query(PortfolioItem).order_by(desc(PortfolioItem.updated_at)).all()
+        portfolio_items = [PortfolioItemResponse.model_validate(item) for item in portfolio_items_db]
+        
+        # Calcular métricas de riesgo
+        risk_service = RiskService()
+        dashboard = risk_service.calculate_risk_dashboard(portfolio_items, top_n=top_n)
+        
+        logger.info(f"Dashboard de riesgo calculado para {len(portfolio_items)} activos")
+        
+        return dashboard
+        
+    except Exception as e:
+        logger.error(f"Error al calcular dashboard de riesgo: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno al calcular el dashboard de riesgo"
         )
 

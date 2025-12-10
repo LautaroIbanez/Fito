@@ -12,6 +12,7 @@ from app.config import (
     MIN_RECOMMENDATION_EVIDENCE
 )
 from app.models import NewsItemResponse, PortfolioItemResponse
+from app.services.news_scoring_service import NewsScoringService
 from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
@@ -143,65 +144,89 @@ class OpenAIService:
         
         return "\n".join(lines)
     
-    def _format_news_list(self, news_items: List[NewsItemResponse]) -> Tuple[str, int, int]:
+    def _format_news_list(
+        self, 
+        news_items: List[NewsItemResponse],
+        portfolio_items: List[PortfolioItemResponse] = None
+    ) -> Tuple[str, int, int]:
         """
-        Formatea la lista de noticias clasificándolas como frescas o stale.
+        Formatea la lista de noticias clasificándolas como frescas o stale,
+        ordenadas por score de relevancia.
         
         Returns:
             Tuple[str, int, int]: (prompt_text, fresh_count, stale_count)
         """
         lines = [
-            "LISTADO DE NOTICIAS",
+            "LISTADO DE NOTICIAS (Ordenadas por Relevancia/Score)",
             "=" * 60,
             f"Fecha de análisis: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}",
             f"Noticias cargadas: {len(news_items)}",
             "",
         ]
         
+        # Calcular scores y ordenar por relevancia
+        scoring_service = NewsScoringService()
+        if portfolio_items:
+            scored_news = scoring_service.score_and_sort_news(news_items, portfolio_items)
+        else:
+            scored_news = scoring_service.score_and_sort_news(news_items, None)
+        
         fresh_news = []
         stale_news = []
         
-        for item in news_items:
+        for item, score_dict in scored_news:
             is_stale, age_days = self._is_news_stale(item.created_at)
             if is_stale:
-                stale_news.append((item, age_days))
+                stale_news.append((item, age_days, score_dict))
             else:
-                fresh_news.append((item, age_days))
+                fresh_news.append((item, age_days, score_dict))
         
-        # Ordenar: frescas primero (más recientes), luego stale
-        fresh_news.sort(key=lambda x: x[1])  # Por antigüedad ascendente
-        stale_news.sort(key=lambda x: x[1], reverse=True)  # Por antigüedad descendente
-        
-        # Sección de noticias frescas
+        # Sección de noticias frescas (ordenadas por score)
         if fresh_news:
-            lines.append("📰 NOTICIAS FRESCAS (Relevancia Alta):")
+            lines.append("📰 NOTICIAS FRESCAS (Ordenadas por Relevancia - Score Descendente):")
             lines.append("-" * 40)
-            for idx, (item, age_days) in enumerate(fresh_news, 1):
+            for idx, (item, age_days, score_dict) in enumerate(fresh_news, 1):
                 lines.append(f"\n{idx}. {item.title or 'Sin título'}")
                 if item.source:
                     lines.append(f"   Fuente: {item.source}")
                 lines.append(f"   Fecha de carga: {item.created_at}")
                 lines.append(f"   Antigüedad: {age_days} día{'s' if age_days != 1 else ''}")
+                lines.append(f"   ⭐ Score de Relevancia: {score_dict['score']:.2f}")
+                components = score_dict['components']
+                if components['ticker_matches'] > 0:
+                    lines.append(f"   📊 Menciones de ticker: {components['ticker_matches']} (Score: +{components['ticker_score']:.2f})")
+                if components['category_matches'] > 0:
+                    lines.append(f"   📈 Menciones de categoría: {components['category_matches']} (Score: +{components['category_score']:.2f})")
+                lines.append(f"   💭 Sentimiento: {components['sentiment_type']} (Score: {components['sentiment_score']:.2f})")
+                lines.append(f"   ⏰ Decay temporal: {components['temporal_decay']:.3f}")
                 lines.append(f"   Contenido: {item.body[:600]}...")  # Primeros 600 caracteres
                 lines.append("")
         else:
             lines.append("⚠️ No hay noticias frescas en el sistema.")
             lines.append("")
         
-        # Sección de noticias desactualizadas
+        # Sección de noticias desactualizadas (ordenadas por score)
         if stale_news:
-            lines.append("⚠️ NOTICIAS DESACTUALIZADAS (Relevancia Débil):")
+            lines.append("⚠️ NOTICIAS DESACTUALIZADAS (Relevancia Débil - Ordenadas por Score):")
             lines.append("-" * 40)
             lines.append(f"ADVERTENCIA: Las siguientes {len(stale_news)} noticias tienen más de {self.stale_days} días de antigüedad.")
             lines.append("Trátalas como CONTEXTO HISTÓRICO, no como información actual.")
             lines.append("")
             
-            for idx, (item, age_days) in enumerate(stale_news, 1):
-                lines.append(f"{idx}. {item.title or 'Sin título'}")
+            for idx, (item, age_days, score_dict) in enumerate(stale_news, 1):
+                obsolete_marker = " ⚠️ OBSOLETA" if score_dict['components']['is_obsolete'] else ""
+                lines.append(f"{idx}. {item.title or 'Sin título'}{obsolete_marker}")
                 if item.source:
                     lines.append(f"   Fuente: {item.source}")
                 lines.append(f"   Fecha de carga: {item.created_at}")
                 lines.append(f"   Antigüedad: {age_days} días ⚠️ DESACTUALIZADA")
+                lines.append(f"   ⭐ Score de Relevancia: {score_dict['score']:.2f}")
+                components = score_dict['components']
+                if components['ticker_matches'] > 0:
+                    lines.append(f"   📊 Menciones de ticker: {components['ticker_matches']}")
+                if components['category_matches'] > 0:
+                    lines.append(f"   📈 Menciones de categoría: {components['category_matches']}")
+                lines.append(f"   💭 Sentimiento: {components['sentiment_type']}")
                 lines.append(f"   Contenido (contexto histórico): {item.body[:400]}...")
                 lines.append("")
         
@@ -229,8 +254,8 @@ class OpenAIService:
             prompt_parts.append("CARTERA: No hay activos registrados en la cartera.\n")
             prompt_parts.append("=" * 60 + "\n\n")
         
-        # 2. Listado de noticias con clasificación
-        news_text, fresh_count, stale_count = self._format_news_list(news_items)
+        # 2. Listado de noticias con clasificación y scoring
+        news_text, fresh_count, stale_count = self._format_news_list(news_items, portfolio_items)
         prompt_parts.append(news_text)
         prompt_parts.append("\n" + "=" * 60 + "\n\n")
         
