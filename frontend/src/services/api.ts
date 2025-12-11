@@ -115,6 +115,11 @@ export const newsApi = {
     return response.data.items
   },
 
+  update: async (id: number, newsItem: NewsItemCreate): Promise<NewsItem> => {
+    const response = await axios.put<NewsItem>(`${API_BASE_URL}/news/${id}`, newsItem)
+    return response.data
+  },
+
   delete: async (id: number): Promise<void> => {
     await axios.delete(`${API_BASE_URL}/news/${id}`)
   },
@@ -202,6 +207,11 @@ export const portfolioApi = {
 
   delete: async (id: number): Promise<void> => {
     await axios.delete(`${API_BASE_URL}/portfolio/${id}`)
+  },
+
+  clearAll: async (): Promise<PortfolioItem[]> => {
+    const response = await axios.delete<{ items: PortfolioItem[]; total: number }>(`${API_BASE_URL}/portfolio`)
+    return response.data.items
   },
 
   getRiskDashboard: async (top_n: number = 5): Promise<RiskDashboard> => {

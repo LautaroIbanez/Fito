@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { newsApi, NewsSummariesResponse, NewsSummary, PortfolioImpact, Suggestion } from '../services/api'
 import './WidgetShared.css'
 import './AssistantWidget.css'
@@ -15,9 +15,7 @@ export default function AssistantWidget({ onUpdate, refreshTrigger, maxItems = 1
   const [error, setError] = useState<string | null>(null)
   const [isDegraded, setIsDegraded] = useState(false)
 
-  useEffect(() => {
-    loadSummaries()
-  }, [refreshTrigger, maxItems])
+  // Removed automatic analysis on load - analysis now runs only when "Analizar" button is clicked
 
   const loadSummaries = async () => {
     try {
@@ -95,15 +93,26 @@ export default function AssistantWidget({ onUpdate, refreshTrigger, maxItems = 1
       <div className="assistant-widget" role="region" aria-label="Widget del Asistente IA">
         <div className="widget-header">
           <h2>🤖 Asistente IA</h2>
-          <button 
-            className="refresh-btn" 
-            onClick={loadSummaries} 
-            disabled
-            aria-label="Actualizar análisis"
-            aria-busy="true"
-          >
-            🔄
-          </button>
+          <div className="widget-actions">
+            <button 
+              className="action-btn" 
+              onClick={loadSummaries} 
+              disabled
+              aria-label="Analizar"
+              aria-busy="true"
+            >
+              🔍 Analizar
+            </button>
+            <button 
+              className="refresh-btn" 
+              onClick={loadSummaries} 
+              disabled
+              aria-label="Actualizar análisis"
+              aria-busy="true"
+            >
+              🔄
+            </button>
+          </div>
         </div>
         <div className="loading" aria-live="polite" aria-busy="true">
           <div className="spinner" aria-hidden="true"></div>
@@ -118,13 +127,22 @@ export default function AssistantWidget({ onUpdate, refreshTrigger, maxItems = 1
       <div className="assistant-widget" role="region" aria-label="Widget del Asistente IA">
         <div className="widget-header">
           <h2>🤖 Asistente IA</h2>
-          <button 
-            className="refresh-btn" 
-            onClick={loadSummaries}
-            aria-label="Reintentar cargar análisis"
-          >
-            🔄
-          </button>
+          <div className="widget-actions">
+            <button 
+              className="action-btn" 
+              onClick={loadSummaries}
+              aria-label="Analizar"
+            >
+              🔍 Analizar
+            </button>
+            <button 
+              className="refresh-btn" 
+              onClick={loadSummaries}
+              aria-label="Reintentar cargar análisis"
+            >
+              🔄
+            </button>
+          </div>
         </div>
         <div className="degraded-state" role="alert" aria-live="assertive">
           <div className="degraded-icon" aria-hidden="true">⚠️</div>
@@ -149,17 +167,28 @@ export default function AssistantWidget({ onUpdate, refreshTrigger, maxItems = 1
       <div className="assistant-widget" role="region" aria-label="Widget del Asistente IA">
         <div className="widget-header">
           <h2>🤖 Asistente IA</h2>
-          <button 
-            className="refresh-btn" 
-            onClick={loadSummaries}
-            aria-label="Actualizar análisis"
-          >
-            🔄
-          </button>
+          <div className="widget-actions">
+            <button 
+              className="action-btn" 
+              onClick={loadSummaries}
+              aria-label="Analizar"
+              disabled={isLoading}
+            >
+              🔍 Analizar
+            </button>
+            <button 
+              className="refresh-btn" 
+              onClick={loadSummaries}
+              aria-label="Actualizar análisis"
+              disabled={isLoading}
+            >
+              🔄
+            </button>
+          </div>
         </div>
         <div className="empty-state" aria-live="polite">
-          <p>No hay noticias para analizar.</p>
-          <p className="hint">Agrega noticias para ver análisis del asistente IA.</p>
+          <p>No hay análisis disponible.</p>
+          <p className="hint">Haz clic en "Analizar" para generar un análisis de las noticias actuales.</p>
         </div>
       </div>
     )
@@ -171,10 +200,20 @@ export default function AssistantWidget({ onUpdate, refreshTrigger, maxItems = 1
         <h2>🤖 Asistente IA</h2>
         <div className="widget-actions">
           <button 
+            className="action-btn" 
+            onClick={loadSummaries} 
+            title="Analizar"
+            aria-label="Analizar noticias"
+            disabled={isLoading}
+          >
+            🔍 Analizar
+          </button>
+          <button 
             className="refresh-btn" 
             onClick={loadSummaries} 
             title="Actualizar análisis"
             aria-label="Actualizar análisis del asistente IA"
+            disabled={isLoading}
           >
             🔄
           </button>

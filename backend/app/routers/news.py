@@ -195,6 +195,56 @@ async def list_news(
         )
 
 
+@router.put("/{news_id}", response_model=NewsItemResponse)
+async def update_news(
+    request: Request,
+    news_id: int,
+    news_item: NewsItemCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Actualiza una noticia existente.
+    
+    Valida que el cuerpo tenga entre 200 y 10000 caracteres.
+    """
+    try:
+        db_item = db.query(NewsItem).filter(NewsItem.id == news_id).first()
+        
+        if not db_item:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Noticia con ID {news_id} no encontrada"
+            )
+        
+        # Actualizar campos
+        db_item.title = news_item.title
+        db_item.body = news_item.body
+        db_item.source = news_item.source
+        # created_at se mantiene, updated_at se actualiza automáticamente por el modelo
+        
+        db.commit()
+        db.refresh(db_item)
+        
+        logger.info(f"Noticia actualizada: ID {news_id}")
+        return NewsItemResponse.model_validate(db_item)
+        
+    except HTTPException:
+        raise
+    except ValueError as e:
+        logger.warning(f"Error de validación al actualizar noticia: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error al actualizar noticia {news_id}: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno al actualizar la noticia"
+        )
+
+
 @router.delete("/{news_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_news(
     news_id: int,

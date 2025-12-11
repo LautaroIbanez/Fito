@@ -38,7 +38,8 @@
   gap: 8px;
 }
 
-.refresh-btn {
+.refresh-btn,
+.action-btn {
   background: #f8f9fa;
   border: 1px solid #e0e0e0;
   border-radius: 6px;
@@ -50,19 +51,22 @@
   font-weight: 500;
 }
 
-.refresh-btn:hover:not(:disabled) {
+.refresh-btn:hover:not(:disabled),
+.action-btn:hover:not(:disabled) {
   background: #e9ecef;
   border-color: #667eea;
   transform: translateY(-1px);
   box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
 }
 
-.refresh-btn:focus-visible {
+.refresh-btn:focus-visible,
+.action-btn:focus-visible {
   outline: 2px solid #667eea;
   outline-offset: 2px;
 }
 
-.refresh-btn:disabled {
+.refresh-btn:disabled,
+.action-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none;
@@ -402,6 +406,15 @@
     font-size: 1.3rem;
   }
   
+  .widget-actions {
+    flex-wrap: wrap;
+  }
+  
+  .action-btn {
+    font-size: 0.85rem;
+    padding: 6px 10px;
+  }
+  
   .summary-title {
     font-size: 0.9rem;
   }
@@ -427,6 +440,7 @@
 @media (prefers-reduced-motion: reduce) {
   .assistant-widget,
   .refresh-btn,
+  .action-btn,
   .retry-button,
   .spinner {
     transition: none;

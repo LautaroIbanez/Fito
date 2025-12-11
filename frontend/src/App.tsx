@@ -39,14 +39,6 @@ function App() {
               setPortfolioRefreshTrigger(prev => prev + 1)
             }}
             refreshTrigger={portfolioRefreshTrigger}
-            onViewDetail={() => {
-              // TODO: Navegar a vista detallada de cartera
-              alert('Vista detallada de cartera - Por implementar')
-            }}
-            onRebalance={() => {
-              // TODO: Abrir modal o navegar a rebalanceo
-              alert('Rebalanceo de cartera - Por implementar')
-            }}
           />
           
           <NewsWidget
@@ -54,7 +46,7 @@ function App() {
             maxItems={10}
             sortBy="score"
             onUpdate={() => {
-              loadNews()
+              setNewsRefreshTrigger(prev => prev + 1)
             }}
           />
           

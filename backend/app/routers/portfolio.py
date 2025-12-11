@@ -178,6 +178,7 @@ async def delete_portfolio_item(
 ):
     """
     Elimina un item de la cartera por ID.
+    También elimina los límites dinámicos asociados.
     """
     try:
         item = db.query(PortfolioItem).filter(PortfolioItem.id == item_id).first()
@@ -188,19 +189,69 @@ async def delete_portfolio_item(
                 detail=f"Item de cartera con ID {item_id} no encontrado"
             )
         
+        # Eliminar primero los límites dinámicos asociados
+        from app.database import DynamicLimit
+        dynamic_limits = db.query(DynamicLimit).filter(
+            DynamicLimit.portfolio_item_id == item_id
+        ).all()
+        
+        for limit in dynamic_limits:
+            db.delete(limit)
+        
+        # Ahora eliminar el item de cartera
         db.delete(item)
         db.commit()
         
-        logger.info(f"Item de cartera eliminado: ID {item_id}")
+        logger.info(f"Item de cartera eliminado: ID {item_id} (junto con {len(dynamic_limits)} límites dinámicos)")
         return None
         
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error al eliminar item de cartera {item_id}: {e}", exc_info=True)
+        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error interno al eliminar el item de cartera"
+        )
+
+
+@router.delete("", response_model=PortfolioListResponse, status_code=status.HTTP_200_OK)
+async def clear_all_portfolio(
+    db: Session = Depends(get_db)
+):
+    """
+    Elimina todos los items de la cartera almacenados y devuelve una lista vacía.
+    También elimina todos los límites dinámicos asociados.
+    """
+    try:
+        from app.database import DynamicLimit
+        
+        # Contar items y límites antes de eliminar
+        total_before = db.query(PortfolioItem).count()
+        limits_before = db.query(DynamicLimit).count()
+        
+        # Eliminar primero todos los límites dinámicos
+        db.query(DynamicLimit).delete()
+        
+        # Luego eliminar todos los items
+        db.query(PortfolioItem).delete()
+        db.commit()
+        
+        logger.info(f"Todos los items de cartera eliminados: {total_before} items y {limits_before} límites borrados")
+        
+        # Devolver lista vacía
+        return PortfolioListResponse(
+            items=[],
+            total=0
+        )
+        
+    except Exception as e:
+        logger.error(f"Error al limpiar todos los items de cartera: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno al limpiar los items de cartera"
         )
 
 

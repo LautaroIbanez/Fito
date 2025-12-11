@@ -226,9 +226,11 @@ async def generate_news_summaries(
         # Convertir a modelos de respuesta
         news_responses = [NewsItemResponse.model_validate(item) for item in news_items]
         
-        # Obtener items de cartera
-        portfolio_items = db.query(PortfolioItem).order_by(desc(PortfolioItem.updated_at)).all()
+        # Obtener los últimos items de cartera (ordenados por fecha de actualización, más recientes primero)
+        portfolio_items = db.query(PortfolioItem).order_by(desc(PortfolioItem.updated_at)).limit(50).all()
         portfolio_responses = [PortfolioItemResponse.model_validate(item) for item in portfolio_items] if portfolio_items else []
+        
+        logger.info(f"Obtenidos {len(portfolio_responses)} items de cartera para análisis de resúmenes")
         
         # Calcular scores
         scoring_service = NewsScoringService()

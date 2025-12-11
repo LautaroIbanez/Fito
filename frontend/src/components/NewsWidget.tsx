@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { newsApi, NewsItem } from '../services/api'
+import { newsApi, NewsItem, NewsItemCreate } from '../services/api'
 import './WidgetShared.css'
 import './NewsWidget.css'
 
@@ -10,23 +10,38 @@ interface NewsWidgetProps {
   sortBy?: 'score' | 'date'
 }
 
+const MIN_BODY_LENGTH = 200
+const MAX_BODY_LENGTH = 10000
+const MAX_TITLE_LENGTH = 200
+const MAX_SOURCE_LENGTH = 100
+
 export default function NewsWidget({ onUpdate, refreshTrigger, maxItems = 10, sortBy = 'score' }: NewsWidgetProps) {
   const [items, setItems] = useState<NewsItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [isAdding, setIsAdding] = useState(false)
+  const [isClearing, setIsClearing] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [formData, setFormData] = useState({
+    title: '',
+    body: '',
+    source: '',
+  })
 
   useEffect(() => {
-    loadNews()
+    loadNews(true) // Skip onUpdate to prevent infinite loop
   }, [refreshTrigger, sortBy])
 
-  const loadNews = async () => {
+  const loadNews = async (skipUpdate = false) => {
     try {
       setIsLoading(true)
       setError(null)
       const data = await newsApi.list(sortBy)
       setItems(data.slice(0, maxItems))
-      onUpdate?.()
+      if (!skipUpdate) {
+        onUpdate?.()
+      }
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Error al cargar las noticias')
     } finally {
@@ -123,20 +138,114 @@ export default function NewsWidget({ onUpdate, refreshTrigger, maxItems = 10, so
     return sectors
   }
 
-  if (isLoading) {
+  const handleAddNew = () => {
+    setIsAdding(true)
+    setEditingId(null)
+    setFormData({ title: '', body: '', source: '' })
+    setError(null)
+  }
+
+  const handleEdit = (item: NewsItem) => {
+    setEditingId(item.id)
+    setIsAdding(false)
+    setFormData({
+      title: item.title || '',
+      body: item.body,
+      source: item.source || '',
+    })
+    setError(null)
+  }
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('¿Estás seguro de eliminar esta noticia?')) return
+    
+    try {
+      setError(null)
+      await newsApi.delete(id)
+      await loadNews(false) // Reload data after deletion
+      onUpdate?.()
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Error al eliminar la noticia')
+    }
+  }
+
+  const handleSave = async () => {
+    const bodyLength = formData.body.trim().length
+    if (bodyLength < MIN_BODY_LENGTH || bodyLength > MAX_BODY_LENGTH) {
+      setError(`El cuerpo debe tener entre ${MIN_BODY_LENGTH} y ${MAX_BODY_LENGTH} caracteres`)
+      return
+    }
+
+    try {
+      setError(null)
+      const dataToSave: NewsItemCreate = {
+        title: formData.title.trim() || undefined,
+        body: formData.body.trim(),
+        source: formData.source.trim() || undefined,
+      }
+      
+      if (editingId) {
+        await newsApi.update(editingId, dataToSave)
+      } else {
+        await newsApi.create(dataToSave)
+      }
+      
+      await loadNews(false) // Reload data after save
+      setIsAdding(false)
+      setEditingId(null)
+      setFormData({ title: '', body: '', source: '' })
+      onUpdate?.()
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Error al guardar la noticia')
+    }
+  }
+
+  const handleClearAll = async () => {
+    if (items.length === 0) return
+    
+    if (!confirm(`¿Estás seguro de eliminar todas las ${items.length} noticias? Esta acción no se puede deshacer.`)) {
+      return
+    }
+
+    try {
+      setIsClearing(true)
+      setError(null)
+      await newsApi.clearAll()
+      await loadNews()
+      onUpdate?.()
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Error al borrar todas las noticias')
+    } finally {
+      setIsClearing(false)
+    }
+  }
+
+  const handleCancelAdd = () => {
+    setIsAdding(false)
+    setEditingId(null)
+    setFormData({ title: '', body: '', source: '' })
+    setError(null)
+  }
+
+  const bodyLength = formData.body.length
+  const isValid = bodyLength >= MIN_BODY_LENGTH && bodyLength <= MAX_BODY_LENGTH
+
+  if (isLoading && !isAdding) {
     return (
       <div className="news-widget" role="region" aria-label="Widget de Noticias">
         <div className="widget-header">
           <h2>📰 Noticias</h2>
-          <button 
-            className="refresh-btn" 
-            onClick={loadNews} 
-            disabled
-            aria-label="Actualizar noticias"
-            aria-busy="true"
-          >
-            🔄
-          </button>
+          <div className="widget-actions">
+            <button 
+              className="refresh-btn" 
+              onClick={loadNews} 
+              disabled
+              aria-label="Actualizar noticias"
+              aria-busy="true"
+            >
+              🔄
+            </button>
+          </div>
         </div>
         <div className="loading" aria-live="polite" aria-busy="true">
           <p>Cargando noticias...</p>
@@ -145,18 +254,20 @@ export default function NewsWidget({ onUpdate, refreshTrigger, maxItems = 10, so
     )
   }
 
-  if (error) {
+  if (error && !isAdding) {
     return (
       <div className="news-widget" role="region" aria-label="Widget de Noticias">
         <div className="widget-header">
           <h2>📰 Noticias</h2>
-          <button 
-            className="refresh-btn" 
-            onClick={loadNews}
-            aria-label="Reintentar cargar noticias"
-          >
-            🔄
-          </button>
+          <div className="widget-actions">
+            <button 
+              className="refresh-btn" 
+              onClick={loadNews}
+              aria-label="Reintentar cargar noticias"
+            >
+              🔄
+            </button>
+          </div>
         </div>
         <div className="error-message" role="alert" aria-live="assertive">{error}</div>
         <button 
@@ -170,22 +281,34 @@ export default function NewsWidget({ onUpdate, refreshTrigger, maxItems = 10, so
     )
   }
 
-  if (items.length === 0) {
+  if (items.length === 0 && !isAdding) {
     return (
       <div className="news-widget" role="region" aria-label="Widget de Noticias">
         <div className="widget-header">
           <h2>📰 Noticias</h2>
-          <button 
-            className="refresh-btn" 
-            onClick={loadNews}
-            aria-label="Actualizar noticias"
-          >
-            🔄
-          </button>
+          <div className="widget-actions">
+            <button 
+              className="action-btn" 
+              onClick={handleAddNew} 
+              title="Agregar noticia"
+              aria-label="Agregar nueva noticia"
+              disabled={isLoading || isClearing}
+            >
+              ➕ Agregar
+            </button>
+            <button 
+              className="refresh-btn" 
+              onClick={loadNews}
+              aria-label="Actualizar noticias"
+              disabled={isLoading || isClearing}
+            >
+              🔄
+            </button>
+          </div>
         </div>
         <div className="empty-state" aria-live="polite">
           <p>No hay noticias disponibles.</p>
-          <p className="hint">Agrega noticias usando el formulario para comenzar.</p>
+          <p className="hint">Agrega noticias usando el botón "Agregar" para comenzar.</p>
         </div>
       </div>
     )
@@ -197,17 +320,108 @@ export default function NewsWidget({ onUpdate, refreshTrigger, maxItems = 10, so
         <h2>📰 Noticias ({items.length})</h2>
         <div className="widget-actions">
           <button 
+            className="action-btn" 
+            onClick={handleAddNew} 
+            title="Agregar noticia"
+            aria-label="Agregar nueva noticia"
+            disabled={isLoading || isClearing}
+          >
+            ➕ Agregar
+          </button>
+          {items.length > 0 && (
+            <button 
+              className="action-btn" 
+              onClick={handleClearAll} 
+              title="Borrar todo"
+              aria-label="Borrar todas las noticias"
+              disabled={isLoading || isClearing}
+            >
+              🗑️ Borrar todo
+            </button>
+          )}
+          <button 
             className="refresh-btn" 
             onClick={loadNews} 
             title="Actualizar noticias"
             aria-label="Actualizar lista de noticias"
+            disabled={isLoading || isClearing}
           >
             🔄
           </button>
         </div>
       </div>
 
-      <div className="news-tiles">
+      {error && (
+        <div className="error-message" role="alert" aria-live="assertive">{error}</div>
+      )}
+
+      {(isAdding || editingId) && (
+        <div className="news-form-card">
+          <h3>{editingId ? '✏️ Editar Noticia' : '➕ Nueva Noticia'}</h3>
+          <div className="news-form-grid">
+            <div className="form-group full-width">
+              <label>Título (opcional)</label>
+              <input
+                type="text"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="Título de la noticia"
+                maxLength={MAX_TITLE_LENGTH}
+                disabled={isLoading}
+              />
+              <div className="char-count">{formData.title.length} / {MAX_TITLE_LENGTH}</div>
+            </div>
+            <div className="form-group full-width">
+              <label>
+                Cuerpo de la noticia <span className="required">*</span>
+              </label>
+              <textarea
+                value={formData.body}
+                onChange={(e) => setFormData({ ...formData, body: e.target.value })}
+                placeholder="Pega aquí el texto completo de la noticia (mínimo 200 caracteres)"
+                minLength={MIN_BODY_LENGTH}
+                maxLength={MAX_BODY_LENGTH}
+                rows={8}
+                disabled={isLoading}
+                className={!isValid && bodyLength > 0 ? 'error' : ''}
+              />
+              <div className={`char-count ${!isValid && bodyLength > 0 ? 'error' : ''}`}>
+                {bodyLength} / {MAX_BODY_LENGTH}
+                {bodyLength < MIN_BODY_LENGTH && bodyLength > 0 && (
+                  <span className="min-required"> (mínimo {MIN_BODY_LENGTH})</span>
+                )}
+              </div>
+            </div>
+            <div className="form-group full-width">
+              <label>Fuente (opcional)</label>
+              <input
+                type="text"
+                value={formData.source}
+                onChange={(e) => setFormData({ ...formData, source: e.target.value })}
+                placeholder="Ej: El País, BBC News, etc."
+                maxLength={MAX_SOURCE_LENGTH}
+                disabled={isLoading}
+              />
+              <div className="char-count">{formData.source.length} / {MAX_SOURCE_LENGTH}</div>
+            </div>
+          </div>
+          <div className="form-actions">
+            <button
+              className="save-button"
+              onClick={handleSave}
+              disabled={!isValid || isLoading}
+            >
+              💾 Guardar
+            </button>
+            <button className="cancel-button" onClick={handleCancelAdd} disabled={isLoading}>
+              ✕ Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {items.length === 0 && !isAdding ? null : (
+        <div className="news-tiles">
         {items.map((item) => {
           const isExpanded = expandedId === item.id
           const tickers = getTickers(item)
@@ -241,6 +455,26 @@ export default function NewsWidget({ onUpdate, refreshTrigger, maxItems = 10, so
                   {item.is_obsolete && (
                     <span className="obsolete-badge" title="Noticia obsoleta (más de 30 días)">⚠️</span>
                   )}
+                  <div className="tile-actions">
+                    <button
+                      className="edit-news-btn"
+                      onClick={() => handleEdit(item)}
+                      title="Editar"
+                      aria-label={`Editar noticia ${item.title || 'sin título'}`}
+                      disabled={isLoading || isClearing}
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      className="delete-news-btn"
+                      onClick={() => handleDelete(item.id)}
+                      title="Eliminar"
+                      aria-label={`Eliminar noticia ${item.title || 'sin título'}`}
+                      disabled={isLoading || isClearing}
+                    >
+                      🗑️
+                    </button>
+                  </div>
                 </div>
                 <div className="tile-meta">
                   {item.source && (
@@ -327,7 +561,8 @@ export default function NewsWidget({ onUpdate, refreshTrigger, maxItems = 10, so
             </div>
           )
         })}
-      </div>
+        </div>
+      )}
     </div>
   )
 }
