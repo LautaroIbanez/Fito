@@ -83,7 +83,8 @@ async def ingest_normalized_news(
         
         logger.info(f"Noticia normalizada ingresada: ID {db_item.id}, status: {db_item.status}")
         
-        return NormalizedNewsResponse.model_validate(db_item)
+        # Convertir usando to_dict() para evitar problemas con el alias
+        return NormalizedNewsResponse(**db_item.to_dict())
         
     except HTTPException:
         raise
@@ -155,7 +156,8 @@ async def normalize_existing_news(
         
         logger.info(f"Noticia {news_id} normalizada: ID normalizado {db_item.id}, status: {db_item.status}")
         
-        return NormalizedNewsResponse.model_validate(db_item)
+        # Convertir usando to_dict() para evitar problemas con el alias
+        return NormalizedNewsResponse(**db_item.to_dict())
         
     except HTTPException:
         raise
@@ -201,7 +203,7 @@ async def list_normalized_news(
         # Ordenar y paginar
         items_db = query.order_by(desc(NormalizedNews.timestamp)).offset(skip).limit(limit).all()
         
-        items = [NormalizedNewsResponse.model_validate(item) for item in items_db]
+        items = [NormalizedNewsResponse(**item.to_dict()) for item in items_db]
         
         return NormalizedNewsListResponse(
             items=items,
@@ -236,7 +238,8 @@ async def get_normalized_news(
                 detail=f"Noticia normalizada con ID {normalized_id} no encontrada"
             )
         
-        return NormalizedNewsResponse.model_validate(item)
+        # Convertir usando to_dict() para evitar problemas con el alias
+        return NormalizedNewsResponse(**item.to_dict())
         
     except HTTPException:
         raise

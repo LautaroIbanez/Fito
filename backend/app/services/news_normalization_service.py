@@ -325,7 +325,7 @@ class NewsNormalizationService:
             title=normalized.get("title"),
             original_text=normalized.get("original_text"),
             categories=json.dumps(normalized.get("categories", []), ensure_ascii=False),
-            metadata=json.dumps(normalized.get("metadata", {}), ensure_ascii=False),
+            metadata_json=json.dumps(normalized.get("metadata", {}), ensure_ascii=False),
             status=status,
             error_details="; ".join(validation_errors) if validation_errors else None,
             validation_errors=json.dumps(validation_errors, ensure_ascii=False) if validation_errors else None,

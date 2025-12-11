@@ -669,7 +669,7 @@ class NormalizedNews(Base):
     title = Column(String(500), nullable=True)  # Título de la noticia
     original_text = Column(Text, nullable=True)  # Texto original completo
     categories = Column(Text, nullable=True)  # JSON array de categorías/sectores
-    metadata = Column(Text, nullable=True)  # JSON con metadatos adicionales
+    metadata_json = Column(Text, nullable=True)  # JSON con metadatos adicionales (renombrado de 'metadata' porque es reservado en SQLAlchemy)
     
     # Estado y validación
     status = Column(String(20), default="valid", nullable=False)  # valid, error, warning
@@ -679,7 +679,7 @@ class NormalizedNews(Base):
     # Relación con noticia original (opcional)
     original_news_id = Column(Integer, ForeignKey("news_items.id"), nullable=True)
     
-    # Metadatos
+    # Timestamps de creación y actualización
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     
@@ -712,9 +712,9 @@ class NormalizedNews(Base):
             except (json.JSONDecodeError, TypeError):
                 categories_list = []
         
-        if self.metadata:
+        if self.metadata_json:
             try:
-                metadata_dict = json.loads(self.metadata)
+                metadata_dict = json.loads(self.metadata_json)
             except (json.JSONDecodeError, TypeError):
                 metadata_dict = {}
         

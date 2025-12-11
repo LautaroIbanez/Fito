@@ -75,6 +75,35 @@ export interface AnalysisResponse {
   version: string
 }
 
+export interface NewsSummary {
+  news_id: number
+  news_title: string
+  summary: string
+  explanation: string
+  score: number
+  sentiment: string
+}
+
+export interface PortfolioImpact {
+  type: 'positive' | 'negative' | 'neutral'
+  description: string
+  affected_assets?: string[]
+}
+
+export interface Suggestion {
+  action: 'add' | 'watch' | 'trim' | 'exit'
+  description: string
+  tone: 'positive' | 'negative' | 'neutral' | 'unknown'
+}
+
+export interface NewsSummariesResponse {
+  summaries: NewsSummary[]
+  portfolio_impacts: PortfolioImpact[]
+  suggestions: Suggestion[]
+  generated_at: string
+  news_count: number
+}
+
 export const newsApi = {
   create: async (newsItem: NewsItemCreate): Promise<NewsItem> => {
     const response = await axios.post<NewsItem>(`${API_BASE_URL}/news`, newsItem)
@@ -104,8 +133,56 @@ export const newsApi = {
     const response = await axios.get<SituationSummary>(`${API_BASE_URL}/news/summary`)
     return response.data
   },
+
+  getNewsSummaries: async (maxItems: number = 10): Promise<NewsSummariesResponse> => {
+    const response = await axios.post<NewsSummariesResponse>(
+      `${API_BASE_URL}/analysis/news-summaries?max_items=${maxItems}`,
+      {}
+    )
+    return response.data
+  },
 }
 
+
+export interface RiskDashboard {
+  portfolio_value: number
+  exposure_by_asset: Array<{
+    id: number
+    name: string
+    symbol?: string
+    asset_type: string
+    value: number
+    percentage: number
+    currency: string
+  }>
+  exposure_by_sector: Array<{
+    sector: string
+    value: number
+    percentage: number
+    asset_count: number
+  }>
+  top_concentrations: Array<{
+    id: number
+    name: string
+    symbol?: string
+    asset_type: string
+    value: number
+    percentage: number
+    currency: string
+  }>
+  volatility: {
+    volatility_30d: number
+    volatility_90d: number
+    annual_volatility: number
+  }
+  var: {
+    var_30d_95: number
+    var_30d_99: number
+    var_90d_95: number
+    var_90d_99: number
+    portfolio_value: number
+  }
+}
 
 export const portfolioApi = {
   list: async (): Promise<PortfolioItem[]> => {
@@ -125,6 +202,11 @@ export const portfolioApi = {
 
   delete: async (id: number): Promise<void> => {
     await axios.delete(`${API_BASE_URL}/portfolio/${id}`)
+  },
+
+  getRiskDashboard: async (top_n: number = 5): Promise<RiskDashboard> => {
+    const response = await axios.get<RiskDashboard>(`${API_BASE_URL}/portfolio/risk-dashboard?top_n=${top_n}`)
+    return response.data
   },
 
 }

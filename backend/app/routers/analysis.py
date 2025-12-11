@@ -1,5 +1,5 @@
 """Endpoints para análisis de noticias."""
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 import logging
@@ -195,5 +195,187 @@ async def analyze_portfolio(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error interno al analizar cartera: {str(e)}"
+        )
+
+
+@router.post("/news-summaries", response_model=dict, status_code=status.HTTP_200_OK)
+async def generate_news_summaries(
+    request: Request,
+    max_items: int = Query(10, description="Número máximo de noticias a analizar"),
+    db: Session = Depends(get_db)
+):
+    """
+    Genera resúmenes sintéticos (2-3 frases) y explicaciones breves para cada noticia.
+    También incluye impactos potenciales en la cartera actual.
+    
+    Diseñado para el widget del asistente IA que muestra análisis por noticia individual.
+    """
+    try:
+        # Obtener noticias recientes ordenadas por score
+        news_items = db.query(NewsItem).order_by(desc(NewsItem.created_at)).limit(max_items).all()
+        
+        if not news_items:
+            return {
+                "summaries": [],
+                "portfolio_impacts": [],
+                "suggestions": [],
+                "generated_at": datetime.utcnow().isoformat(),
+                "news_count": 0
+            }
+        
+        # Convertir a modelos de respuesta
+        news_responses = [NewsItemResponse.model_validate(item) for item in news_items]
+        
+        # Obtener items de cartera
+        portfolio_items = db.query(PortfolioItem).order_by(desc(PortfolioItem.updated_at)).all()
+        portfolio_responses = [PortfolioItemResponse.model_validate(item) for item in portfolio_items] if portfolio_items else []
+        
+        # Calcular scores
+        scoring_service = NewsScoringService()
+        scored_news = scoring_service.score_and_sort_news(news_responses, portfolio_responses if portfolio_responses else None)
+        
+        # Generar resúmenes con OpenAI
+        openai_service = OpenAIService()
+        summaries = []
+        
+        for item, score_dict in scored_news[:max_items]:
+            try:
+                # Generar resumen sintético (2-3 frases) y explicación breve
+                summary_prompt = f"""Analiza esta noticia y proporciona:
+1. Un resumen sintético de 2-3 frases máximo
+2. Una explicación breve y comprensible del contenido (1-2 frases)
+
+Noticia:
+Título: {item.title or 'Sin título'}
+Contenido: {item.body[:500]}
+
+Responde en formato JSON:
+{{
+  "summary": "resumen de 2-3 frases",
+  "explanation": "explicación breve y comprensible"
+}}"""
+                
+                response = openai_service.client.chat.completions.create(
+                    model=openai_service.model,
+                    messages=[
+                        {"role": "system", "content": "Eres un asistente financiero que explica noticias de forma clara y concisa."},
+                        {"role": "user", "content": summary_prompt}
+                    ],
+                    temperature=0.7,
+                    max_tokens=200
+                )
+                
+                import json
+                content = response.choices[0].message.content
+                # Extraer JSON del contenido
+                json_start = content.find('{')
+                json_end = content.rfind('}') + 1
+                if json_start >= 0 and json_end > json_start:
+                    summary_data = json.loads(content[json_start:json_end])
+                else:
+                    # Fallback si no se encuentra JSON
+                    summary_data = {
+                        "summary": item.body[:200] + "..." if len(item.body) > 200 else item.body,
+                        "explanation": "Análisis no disponible temporalmente"
+                    }
+                
+                summaries.append({
+                    "news_id": item.id,
+                    "news_title": item.title or "Sin título",
+                    "summary": summary_data.get("summary", ""),
+                    "explanation": summary_data.get("explanation", ""),
+                    "score": score_dict["score"],
+                    "sentiment": score_dict["components"].get("sentiment_type", "neutral")
+                })
+                
+            except Exception as e:
+                logger.warning(f"Error generando resumen para noticia {item.id}: {e}")
+                # Fallback: usar texto truncado
+                summaries.append({
+                    "news_id": item.id,
+                    "news_title": item.title or "Sin título",
+                    "summary": item.body[:200] + "..." if len(item.body) > 200 else item.body,
+                    "explanation": "Análisis no disponible temporalmente",
+                    "score": score_dict["score"],
+                    "sentiment": score_dict["components"].get("sentiment_type", "neutral")
+                })
+        
+        # Generar impactos en cartera y sugerencias
+        portfolio_impacts = []
+        suggestions = []
+        
+        if portfolio_responses:
+            try:
+                impact_prompt = f"""Analiza el impacto potencial de estas noticias en la siguiente cartera:
+
+Cartera actual:
+{chr(10).join([f"- {item.name} ({item.symbol or 'N/A'}) - {item.asset_type}" for item in portfolio_responses[:10]])}
+
+Noticias analizadas: {len(summaries)}
+
+Proporciona:
+1. Impactos potenciales (positivo/negativo/neutro) en la cartera
+2. Sugerencias de acciones o elementos a considerar
+
+Responde en formato JSON:
+{{
+  "impacts": [
+    {{
+      "type": "positive|negative|neutral",
+      "description": "descripción del impacto",
+      "affected_assets": ["asset1", "asset2"]
+    }}
+  ],
+  "suggestions": [
+    {{
+      "action": "add|watch|trim|exit",
+      "description": "descripción de la sugerencia",
+      "tone": "positive|negative|neutral"
+    }}
+  ]
+}}"""
+                
+                response = openai_service.client.chat.completions.create(
+                    model=openai_service.model,
+                    messages=[
+                        {"role": "system", "content": "Eres un asistente financiero experto que analiza impactos en carteras de inversión."},
+                        {"role": "user", "content": impact_prompt}
+                    ],
+                    temperature=0.7,
+                    max_tokens=400
+                )
+                
+                content = response.choices[0].message.content
+                json_start = content.find('{')
+                json_end = content.rfind('}') + 1
+                if json_start >= 0 and json_end > json_start:
+                    impact_data = json.loads(content[json_start:json_end])
+                    portfolio_impacts = impact_data.get("impacts", [])
+                    suggestions = impact_data.get("suggestions", [])
+                else:
+                    # Fallback
+                    portfolio_impacts = []
+                    suggestions = []
+                    
+            except Exception as e:
+                logger.warning(f"Error generando impactos en cartera: {e}")
+                portfolio_impacts = []
+                suggestions = []
+        
+        return {
+            "summaries": summaries,
+            "portfolio_impacts": portfolio_impacts,
+            "suggestions": suggestions,
+            "generated_at": datetime.utcnow().isoformat(),
+            "news_count": len(summaries)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error inesperado al generar resúmenes de noticias: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error interno al generar resúmenes: {str(e)}"
         )
 

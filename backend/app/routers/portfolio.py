@@ -19,6 +19,7 @@ from app.models import (
 from app.database import TradingRecommendation as TradingRecommendationDB
 from app.services.trading_recommendations_service import TradingRecommendationsService
 from app.services.recommendation_audit_service import RecommendationAuditService
+from app.services.risk_service import RiskService
 from sqlalchemy import and_, or_, desc, asc
 
 logger = logging.getLogger(__name__)
@@ -90,6 +91,31 @@ async def list_portfolio(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error interno al listar la cartera"
+        )
+
+
+@router.get("/risk-dashboard")
+async def get_risk_dashboard(
+    top_n: int = 5,
+    db: Session = Depends(get_db)
+):
+    """
+    Obtiene el dashboard de riesgo con métricas consolidadas de la cartera.
+    Incluye valor total, concentraciones, exposición por sector y métricas de riesgo.
+    """
+    try:
+        portfolio_items_db = db.query(PortfolioItem).all()
+        portfolio_items = [PortfolioItemResponse.model_validate(item) for item in portfolio_items_db]
+        
+        risk_service = RiskService()
+        dashboard = risk_service.calculate_risk_dashboard(portfolio_items, top_n=top_n)
+        
+        return dashboard
+    except Exception as e:
+        logger.error(f"Error al calcular dashboard de riesgo: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno al calcular el dashboard de riesgo"
         )
 
 
