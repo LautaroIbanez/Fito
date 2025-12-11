@@ -134,3 +134,4 @@ class SituationSummaryService:
         
         return "\n".join(prompt_parts)
 
+

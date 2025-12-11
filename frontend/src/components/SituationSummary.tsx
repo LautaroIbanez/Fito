@@ -99,3 +99,4 @@ export default function SituationSummaryComponent({ autoRefresh = false, onUpdat
   )
 }
 
+

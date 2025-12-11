@@ -8,7 +8,7 @@ import logging
 
 from app.config import validate_config, RATE_LIMIT_PER_MINUTE
 from app.database import init_db
-from app.routers import news, analysis, portfolio, suggestions, opportunities
+from app.routers import news, analysis, portfolio, suggestions, opportunities, normalized_news
 
 # Validar configuración antes de iniciar
 validate_config()
@@ -58,6 +58,7 @@ app.include_router(analysis.router, prefix="/api")
 app.include_router(portfolio.router, prefix="/api")
 app.include_router(suggestions.router, prefix="/api")
 app.include_router(opportunities.router, prefix="/api")
+app.include_router(normalized_news.router, prefix="/api")
 
 
 @app.get("/")

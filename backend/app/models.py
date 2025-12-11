@@ -978,3 +978,72 @@ class SituationSummaryResponse(BaseModel):
     generated_at: str = Field(..., description="Fecha de generación del resumen")
     has_content: bool = Field(..., description="Si el resumen tiene contenido")
     tokens_used: Optional[int] = Field(None, description="Tokens utilizados en la generación")
+
+
+# ==================== Normalized News Models ====================
+
+class NormalizedNewsCreate(BaseModel):
+    """Modelo para crear una noticia normalizada."""
+    source: str = Field(..., max_length=200, description="Fuente de la noticia")
+    timestamp: str = Field(..., description="Timestamp de la noticia (ISO format)")
+    summary: str = Field(..., min_length=50, max_length=1000, description="Resumen de la noticia")
+    sentiment: str = Field(..., description="Sentimiento: bullish, bearish, neutral")
+    impact_score: float = Field(..., ge=0.0, le=1.0, description="Score de impacto (0.0-1.0)")
+    tickers: Optional[List[str]] = Field(default_factory=list, description="Lista de tickers mencionados")
+    entities: Optional[List[str]] = Field(default_factory=list, description="Lista de entidades (personas, empresas)")
+    title: Optional[str] = Field(None, max_length=500, description="Título de la noticia")
+    original_text: Optional[str] = Field(None, description="Texto original completo")
+    categories: Optional[List[str]] = Field(default_factory=list, description="Categorías/sectores")
+    metadata: Optional[Dict] = Field(default_factory=dict, description="Metadatos adicionales")
+    original_news_id: Optional[int] = Field(None, description="ID de la noticia original")
+
+    @field_validator('sentiment')
+    @classmethod
+    def validate_sentiment(cls, v):
+        """Valida que el sentimiento sea válido."""
+        from app.config import NORMALIZED_NEWS_VALID_SENTIMENTS
+        v_lower = v.lower()
+        if v_lower not in [s.lower() for s in NORMALIZED_NEWS_VALID_SENTIMENTS]:
+            raise ValueError(f"Sentiment debe ser uno de: {', '.join(NORMALIZED_NEWS_VALID_SENTIMENTS)}")
+        return v_lower
+
+
+class NormalizedNewsResponse(BaseModel):
+    """Modelo de respuesta para noticia normalizada."""
+    id: int
+    source: str
+    timestamp: str
+    summary: str
+    sentiment: str
+    impact_score: float
+    tickers: List[str]
+    entities: List[str]
+    title: Optional[str] = None
+    original_text: Optional[str] = None
+    categories: List[str]
+    metadata: Dict
+    status: str
+    error_details: Optional[str] = None
+    validation_errors: List[str]
+    original_news_id: Optional[int] = None
+    created_at: str
+    updated_at: str
+
+    @field_validator('timestamp', 'created_at', 'updated_at', mode='before')
+    @classmethod
+    def convert_datetime(cls, v):
+        """Convierte datetime a string ISO format."""
+        if isinstance(v, datetime):
+            return v.isoformat()
+        return v
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class NormalizedNewsListResponse(BaseModel):
+    """Modelo de respuesta para lista de noticias normalizadas."""
+    items: List[NormalizedNewsResponse]
+    total: int
+    valid_count: int
+    error_count: int
+    warning_count: int

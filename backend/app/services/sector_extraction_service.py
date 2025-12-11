@@ -184,3 +184,4 @@ class SectorExtractionService:
         
         return scores
 
+

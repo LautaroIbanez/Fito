@@ -648,6 +648,104 @@ class AssetCatalog(Base):
         }
 
 
+class NormalizedNews(Base):
+    """Modelo de datos para noticias normalizadas con esquema unificado."""
+    __tablename__ = "normalized_news"
+
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # Campos obligatorios
+    source = Column(String(200), nullable=False, index=True)  # Fuente de la noticia
+    timestamp = Column(DateTime, nullable=False, index=True)  # Timestamp de la noticia
+    summary = Column(Text, nullable=False)  # Resumen de la noticia
+    sentiment = Column(String(20), nullable=False, index=True)  # bullish, bearish, neutral
+    impact_score = Column(Float, nullable=False)  # Score de impacto (0.0-1.0)
+    
+    # Campos para cruzar con cartera
+    tickers = Column(Text, nullable=True)  # JSON array de tickers mencionados
+    entities = Column(Text, nullable=True)  # JSON array de entidades (personas, empresas, sectores)
+    
+    # Campos opcionales
+    title = Column(String(500), nullable=True)  # Título de la noticia
+    original_text = Column(Text, nullable=True)  # Texto original completo
+    categories = Column(Text, nullable=True)  # JSON array de categorías/sectores
+    metadata = Column(Text, nullable=True)  # JSON con metadatos adicionales
+    
+    # Estado y validación
+    status = Column(String(20), default="valid", nullable=False)  # valid, error, warning
+    error_details = Column(Text, nullable=True)  # Detalles del error si status != valid
+    validation_errors = Column(Text, nullable=True)  # JSON array de errores de validación
+    
+    # Relación con noticia original (opcional)
+    original_news_id = Column(Integer, ForeignKey("news_items.id"), nullable=True)
+    
+    # Metadatos
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relación
+    original_news = relationship("NewsItem", backref="normalized_versions")
+
+    def to_dict(self):
+        """Convierte el modelo a diccionario."""
+        tickers_list = None
+        entities_list = None
+        categories_list = None
+        metadata_dict = None
+        validation_errors_list = None
+        
+        if self.tickers:
+            try:
+                tickers_list = json.loads(self.tickers)
+            except (json.JSONDecodeError, TypeError):
+                tickers_list = []
+        
+        if self.entities:
+            try:
+                entities_list = json.loads(self.entities)
+            except (json.JSONDecodeError, TypeError):
+                entities_list = []
+        
+        if self.categories:
+            try:
+                categories_list = json.loads(self.categories)
+            except (json.JSONDecodeError, TypeError):
+                categories_list = []
+        
+        if self.metadata:
+            try:
+                metadata_dict = json.loads(self.metadata)
+            except (json.JSONDecodeError, TypeError):
+                metadata_dict = {}
+        
+        if self.validation_errors:
+            try:
+                validation_errors_list = json.loads(self.validation_errors)
+            except (json.JSONDecodeError, TypeError):
+                validation_errors_list = []
+        
+        return {
+            "id": self.id,
+            "source": self.source,
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "summary": self.summary,
+            "sentiment": self.sentiment,
+            "impact_score": self.impact_score,
+            "tickers": tickers_list or [],
+            "entities": entities_list or [],
+            "title": self.title,
+            "original_text": self.original_text,
+            "categories": categories_list or [],
+            "metadata": metadata_dict or {},
+            "status": self.status,
+            "error_details": self.error_details,
+            "validation_errors": validation_errors_list or [],
+            "original_news_id": self.original_news_id,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
 class WatchlistItem(Base):
     """Items en la watchlist del usuario."""
     __tablename__ = "watchlist_items"

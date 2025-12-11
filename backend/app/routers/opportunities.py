@@ -209,3 +209,4 @@ async def remove_from_watchlist(
             detail="Error interno al eliminar de watchlist"
         )
 
+

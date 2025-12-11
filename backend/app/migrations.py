@@ -33,17 +33,18 @@ def add_standardized_data_column():
 def add_sectors_and_catalog_tables():
     """Crea las tablas de sectores y catálogo de activos si no existen."""
     try:
-        from app.database import Base, Sector, AssetCatalog, WatchlistItem, TradingRecommendation
+        from app.database import Base, Sector, AssetCatalog, WatchlistItem, TradingRecommendation, NormalizedNews
         Base.metadata.create_all(
             bind=engine, 
             tables=[
                 Sector.__table__, 
                 AssetCatalog.__table__, 
                 WatchlistItem.__table__,
-                TradingRecommendation.__table__
+                TradingRecommendation.__table__,
+                NormalizedNews.__table__
             ]
         )
-        logger.info("Tablas de sectores, catálogo, watchlist y recomendaciones creadas/verificadas")
+        logger.info("Tablas de sectores, catálogo, watchlist, recomendaciones y noticias normalizadas creadas/verificadas")
     except Exception as e:
         logger.error(f"Error creando tablas de sectores/catálogo: {e}", exc_info=True)
         raise
@@ -52,7 +53,7 @@ def add_sectors_and_catalog_tables():
 def init_catalog_data():
     """Inicializa datos del catálogo si está vacío."""
     try:
-        from app.database import Sector, AssetCatalog
+        from app.database import Sector, AssetCatalog, SessionLocal
         from app.scripts.init_catalog import init_catalog
         
         # Verificar si ya hay sectores

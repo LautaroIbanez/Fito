@@ -116,3 +116,4 @@ class MarketFeaturesService:
             "atr": self.get_atr(symbol)
         }
 
+
