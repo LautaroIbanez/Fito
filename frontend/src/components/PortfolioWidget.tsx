@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { portfolioApi, PortfolioItem, PortfolioItemCreate } from '../services/api'
+import PriceChart from './PriceChart'
 import './WidgetShared.css'
 import './PortfolioWidget.css'
 
@@ -16,9 +17,18 @@ export default function PortfolioWidget({ onUpdate, refreshTrigger }: PortfolioW
   const [error, setError] = useState<string | null>(null)
   const [isAdding, setIsAdding] = useState(false)
   const [isClearing, setIsClearing] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [expandedChartId, setExpandedChartId] = useState<number | null>(null)
+  const [priceData, setPriceData] = useState<Record<number, Array<{ date: string; price: number }>>>({})
+  const [loadingCharts, setLoadingCharts] = useState<Record<number, boolean>>({})
   const [formData, setFormData] = useState({
     asset_type: 'acciones',
     name: '',
+    symbol: '',
+    quantity: '',
+    price: '',
+    total_value: '',
+    currency: 'USD',
   })
 
   useEffect(() => {
@@ -44,7 +54,8 @@ export default function PortfolioWidget({ onUpdate, refreshTrigger }: PortfolioW
 
   const handleAddNew = () => {
     setIsAdding(true)
-    setFormData({ asset_type: 'acciones', name: '' })
+    setEditingId(null)
+    setFormData({ asset_type: 'acciones', name: '', symbol: '', quantity: '', price: '', total_value: '', currency: 'USD' })
     setError(null)
   }
 
@@ -59,17 +70,23 @@ export default function PortfolioWidget({ onUpdate, refreshTrigger }: PortfolioW
       const dataToSave: PortfolioItemCreate = {
         asset_type: formData.asset_type,
         name: formData.name.trim(),
-        symbol: '',
-        quantity: '',
-        price: '',
-        total_value: '',
-        currency: 'USD',
+        symbol: formData.symbol.trim(),
+        quantity: formData.quantity.trim(),
+        price: formData.price.trim(),
+        total_value: formData.total_value.trim(),
+        currency: formData.currency,
         notes: '',
       }
       
-      await portfolioApi.create(dataToSave)
-      setIsAdding(false)
-      setFormData({ asset_type: 'acciones', name: '' })
+      if (editingId) {
+        await portfolioApi.update(editingId, dataToSave)
+        setEditingId(null)
+      } else {
+        await portfolioApi.create(dataToSave)
+        setIsAdding(false)
+      }
+      
+      setFormData({ asset_type: 'acciones', name: '', symbol: '', quantity: '', price: '', total_value: '', currency: 'USD' })
       // Reload data and trigger parent update
       await loadData(false) // Don't skip update - this is a manual action
       onUpdate?.()
@@ -77,6 +94,27 @@ export default function PortfolioWidget({ onUpdate, refreshTrigger }: PortfolioW
       setError(err.response?.data?.detail || 'Error al guardar el item')
       // loadData() handles isLoading state in its finally block
     }
+  }
+
+  const handleEdit = (item: PortfolioItem) => {
+    setEditingId(item.id)
+    setFormData({
+      asset_type: item.asset_type || 'acciones',
+      name: item.name || '',
+      symbol: item.symbol || '',
+      quantity: item.quantity || '',
+      price: item.price || '',
+      total_value: item.total_value || '',
+      currency: item.currency || 'USD',
+    })
+    setIsAdding(false)
+    setError(null)
+  }
+
+  const handleCancelEdit = () => {
+    setEditingId(null)
+    setFormData({ asset_type: 'acciones', name: '', symbol: '', quantity: '', price: '', total_value: '', currency: 'USD' })
+    setError(null)
   }
 
   const handleClearAll = async () => {
@@ -102,7 +140,8 @@ export default function PortfolioWidget({ onUpdate, refreshTrigger }: PortfolioW
 
   const handleCancelAdd = () => {
     setIsAdding(false)
-    setFormData({ asset_type: 'acciones', name: '' })
+    setEditingId(null)
+    setFormData({ asset_type: 'acciones', name: '', symbol: '', quantity: '', price: '', total_value: '', currency: 'USD' })
     setError(null)
   }
 
@@ -116,6 +155,27 @@ export default function PortfolioWidget({ onUpdate, refreshTrigger }: PortfolioW
       onUpdate?.()
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Error al eliminar el activo')
+    }
+  }
+
+  const handleToggleChart = async (itemId: number) => {
+    if (expandedChartId === itemId) {
+      setExpandedChartId(null)
+    } else {
+      setExpandedChartId(itemId)
+      
+      // Cargar datos de precio si no están en caché
+      if (!priceData[itemId]) {
+        try {
+          setLoadingCharts(prev => ({ ...prev, [itemId]: true }))
+          const history = await portfolioApi.getPriceHistory(itemId, 60)
+          setPriceData(prev => ({ ...prev, [itemId]: history.data }))
+        } catch (err: any) {
+          console.error('Error al cargar historial de precios:', err)
+        } finally {
+          setLoadingCharts(prev => ({ ...prev, [itemId]: false }))
+        }
+      }
     }
   }
 
@@ -175,9 +235,9 @@ export default function PortfolioWidget({ onUpdate, refreshTrigger }: PortfolioW
         <div className="error-message" role="alert" aria-live="assertive">{error}</div>
       )}
 
-      {isAdding && (
+      {(isAdding || editingId) && (
         <div className="portfolio-form-card">
-          <h3>➕ Nuevo Item</h3>
+          <h3>{editingId ? '✏️ Editar Item' : '➕ Nuevo Item'}</h3>
           <div className="simple-form-grid">
             <div className="form-group">
               <label>Categoría *</label>
@@ -197,12 +257,80 @@ export default function PortfolioWidget({ onUpdate, refreshTrigger }: PortfolioW
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="Ej: Apple Inc. o AAPL"
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter' && isValid) {
-                    handleSave()
-                  }
-                }}
               />
+            </div>
+            <div className="form-group">
+              <label>Símbolo</label>
+              <input
+                type="text"
+                value={formData.symbol}
+                onChange={(e) => setFormData({ ...formData, symbol: e.target.value })}
+                placeholder="Ej: AAPL"
+              />
+            </div>
+            <div className="form-group">
+              <label>Cantidad</label>
+              <input
+                type="text"
+                value={formData.quantity}
+                onChange={(e) => {
+                  const qty = e.target.value
+                  const price = formData.price
+                  let total = ''
+                  if (qty && price) {
+                    const qtyNum = parseFloat(qty.replace(/,/g, ''))
+                    const priceNum = parseFloat(price.replace(/,/g, ''))
+                    if (!isNaN(qtyNum) && !isNaN(priceNum)) {
+                      total = (qtyNum * priceNum).toFixed(2)
+                    }
+                  }
+                  setFormData({ ...formData, quantity: qty, total_value: total || formData.total_value })
+                }}
+                placeholder="Ej: 100"
+              />
+            </div>
+            <div className="form-group">
+              <label>Precio Unitario</label>
+              <input
+                type="text"
+                value={formData.price}
+                onChange={(e) => {
+                  const price = e.target.value
+                  const qty = formData.quantity
+                  let total = ''
+                  if (qty && price) {
+                    const qtyNum = parseFloat(qty.replace(/,/g, ''))
+                    const priceNum = parseFloat(price.replace(/,/g, ''))
+                    if (!isNaN(qtyNum) && !isNaN(priceNum)) {
+                      total = (qtyNum * priceNum).toFixed(2)
+                    }
+                  }
+                  setFormData({ ...formData, price: price, total_value: total || formData.total_value })
+                }}
+                placeholder="Ej: 150.50"
+              />
+            </div>
+            <div className="form-group">
+              <label>Valor Total</label>
+              <input
+                type="text"
+                value={formData.total_value}
+                onChange={(e) => setFormData({ ...formData, total_value: e.target.value })}
+                placeholder="Ej: 15050.00"
+              />
+              <small className="form-hint">Se calcula automáticamente si ingresas cantidad y precio</small>
+            </div>
+            <div className="form-group">
+              <label>Moneda</label>
+              <select
+                value={formData.currency}
+                onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+              >
+                <option value="USD">USD</option>
+                <option value="ARS">ARS</option>
+                <option value="EUR">EUR</option>
+                <option value="BRL">BRL</option>
+              </select>
             </div>
           </div>
           <div className="form-actions">
@@ -213,7 +341,7 @@ export default function PortfolioWidget({ onUpdate, refreshTrigger }: PortfolioW
             >
               💾 Guardar
             </button>
-            <button className="cancel-button" onClick={handleCancelAdd} disabled={isLoading}>
+            <button className="cancel-button" onClick={editingId ? handleCancelEdit : handleCancelAdd} disabled={isLoading}>
               ✕ Cancelar
             </button>
           </div>
@@ -231,23 +359,62 @@ export default function PortfolioWidget({ onUpdate, refreshTrigger }: PortfolioW
           {items.length > 0 ? (
             <div className="portfolio-items-list">
               {items.map((item) => (
-                <div key={item.id} className="portfolio-item-row">
-                  <div className="item-info">
-                    <span className={`asset-type-badge ${item.asset_type}`}>
-                      {item.asset_type}
-                    </span>
-                    <span className="item-name">{item.name}</span>
-                    {item.symbol && <span className="item-symbol">({item.symbol})</span>}
+                <div key={item.id} className="portfolio-item-container">
+                  <div className="portfolio-item-row">
+                    <div className="item-info">
+                      <span className={`asset-type-badge ${item.asset_type}`}>
+                        {item.asset_type}
+                      </span>
+                      <span className="item-name">{item.name}</span>
+                      {item.symbol && <span className="item-symbol">({item.symbol})</span>}
+                    </div>
+                    <div className="item-actions">
+                      <button
+                        className="edit-item-btn"
+                        onClick={() => handleEdit(item)}
+                        title="Editar"
+                        aria-label={`Editar ${item.name}`}
+                        disabled={isLoading || isClearing || editingId !== null}
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        className="chart-toggle-btn"
+                        onClick={() => handleToggleChart(item.id)}
+                        title="Ver gráfico de precios"
+                        aria-label={`Ver gráfico para ${item.name}`}
+                        disabled={isLoading || isClearing || loadingCharts[item.id] || editingId !== null}
+                      >
+                        {expandedChartId === item.id ? '📉 Ocultar' : '📈 Ver Gráfico'}
+                      </button>
+                      <button
+                        className="delete-item-btn"
+                        onClick={() => handleDeleteItem(item.id)}
+                        title="Eliminar"
+                        aria-label={`Eliminar ${item.name}`}
+                        disabled={isLoading || isClearing || editingId !== null}
+                      >
+                        🗑️
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    className="delete-item-btn"
-                    onClick={() => handleDeleteItem(item.id)}
-                    title="Eliminar"
-                    aria-label={`Eliminar ${item.name}`}
-                    disabled={isLoading || isClearing}
-                  >
-                    🗑️
-                  </button>
+                  
+                  {expandedChartId === item.id && (
+                    <div className="item-chart-container">
+                      {loadingCharts[item.id] ? (
+                        <div className="chart-loading">Cargando datos de precios...</div>
+                      ) : priceData[item.id] && priceData[item.id].length > 0 ? (
+                        <PriceChart
+                          data={priceData[item.id]}
+                          title={item.name}
+                          symbol={item.symbol}
+                          height={250}
+                        />
+                      ) : (
+                        <div className="chart-error">No hay datos de precio disponibles para este activo</div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

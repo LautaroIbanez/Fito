@@ -219,6 +219,16 @@ export const portfolioApi = {
     return response.data
   },
 
+  getPriceHistory: async (itemId: number, days: number = 60): Promise<{ item_id: number; symbol?: string; name: string; data: Array<{ date: string; price: number }>; days: number; note: string }> => {
+    const response = await axios.get(`${API_BASE_URL}/portfolio/${itemId}/price-history?days=${days}`)
+    return response.data
+  },
+
+  getProfessionalInsights: async (): Promise<{ insights: Array<{ title: string; explanation: string }> }> => {
+    const response = await axios.get(`${API_BASE_URL}/portfolio/professional-insights`)
+    return response.data
+  },
+
 }
 
 

@@ -392,6 +392,10 @@
   gap: 8px;
 }
 
+.portfolio-item-container {
+  margin-bottom: 12px;
+}
+
 .portfolio-item-row {
   display: flex;
   justify-content: space-between;
@@ -425,6 +429,59 @@
   font-size: 0.9rem;
 }
 
+.item-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.edit-item-btn {
+  background: #28a745;
+  color: white;
+  border: none;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  opacity: 0.8;
+}
+
+.edit-item-btn:hover:not(:disabled) {
+  opacity: 1;
+  background: #218838;
+  transform: scale(1.05);
+}
+
+.edit-item-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.chart-toggle-btn {
+  background: #667eea;
+  color: white;
+  border: none;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.chart-toggle-btn:hover:not(:disabled) {
+  background: #5568d3;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+}
+
+.chart-toggle-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .delete-item-btn {
   background: transparent;
   border: none;
@@ -445,6 +502,27 @@
 .delete-item-btn:disabled {
   opacity: 0.3;
   cursor: not-allowed;
+}
+
+.item-chart-container {
+  margin-top: 12px;
+  padding: 16px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.chart-loading,
+.chart-error {
+  text-align: center;
+  padding: 20px;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.chart-error {
+  color: #f44336;
 }
 
 .error-message {
@@ -504,6 +582,14 @@
 .form-group select:focus {
   outline: none;
   border-color: #667eea;
+}
+
+.form-hint {
+  display: block;
+  font-size: 0.75rem;
+  color: #666;
+  margin-top: 4px;
+  font-style: italic;
 }
 
 .form-actions {

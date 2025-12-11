@@ -128,6 +128,13 @@ export default function AssetSuggestions({ autoRefresh = false, refreshTrigger =
         </div>
       )}
 
+      <div className="suggestions-info">
+        <p>
+          <strong>Fuente de datos:</strong> Yahoo Finance. <strong>Filtros:</strong> Técnicos simples. 
+          <strong> Nota:</strong> No se realizan búsquedas web en vivo.
+        </p>
+      </div>
+
       <div className="generation-params">
         <h3>Parámetros de Generación</h3>
         <div className="params-grid">

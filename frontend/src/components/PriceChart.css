@@ -1,0 +1,142 @@
+.price-chart-container {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+}
+
+.chart-wrapper {
+  position: relative;
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.price-chart-canvas {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+}
+
+.chart-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: #888;
+}
+
+.chart-hint {
+  font-size: 0.9rem;
+  margin-top: 10px;
+  color: #aaa;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  font-size: 0.9rem;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legend-line {
+  display: block;
+  border-radius: 2px;
+}
+
+.legend-line-dashed {
+  display: block;
+  border-radius: 2px;
+  background: repeating-linear-gradient(
+    to right,
+    #F5A623 0,
+    #F5A623 4px,
+    transparent 4px,
+    transparent 8px
+  );
+}
+
+.legend-toggle {
+  background: transparent;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #666;
+  margin-left: auto;
+  transition: all 0.2s ease;
+}
+
+.legend-toggle:hover {
+  background: #e9ecef;
+  border-color: #667eea;
+}
+
+.chart-tooltip {
+  position: fixed;
+  background: rgba(0, 0, 0, 0.85);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  pointer-events: none;
+  z-index: 1000;
+  white-space: pre-line;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  max-width: 200px;
+}
+
+.chart-info {
+  padding: 12px;
+  background: #f0f7ff;
+  border-left: 3px solid #4A90E2;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.info-text {
+  margin: 0 0 8px 0;
+  color: #333;
+}
+
+.info-warning {
+  margin: 8px 0 0 0;
+  color: #f5a623;
+  font-weight: 500;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .price-chart-container {
+    padding: 16px;
+  }
+
+  .chart-legend {
+    font-size: 0.85rem;
+    gap: 12px;
+  }
+
+  .chart-info {
+    font-size: 0.8rem;
+  }
+
+  .chart-tooltip {
+    font-size: 0.8rem;
+    padding: 6px 10px;
+    max-width: 150px;
+  }
+}
+

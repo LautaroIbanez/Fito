@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import NewsWidget from './components/NewsWidget'
 import AssistantWidget from './components/AssistantWidget'
 import PortfolioWidget from './components/PortfolioWidget'
+import PortfolioSummaryCard from './components/PortfolioSummaryCard'
 import { newsApi, NewsItem } from './services/api'
 import './App.css'
 
@@ -34,6 +35,10 @@ function App() {
 
       <main className="app-main">
         <div className="widgets-grid">
+          <div className="summary-section">
+            <PortfolioSummaryCard refreshTrigger={portfolioRefreshTrigger} />
+          </div>
+          
           <PortfolioWidget 
             onUpdate={() => {
               setPortfolioRefreshTrigger(prev => prev + 1)

@@ -39,6 +39,10 @@
   align-items: start;
 }
 
+.summary-section {
+  grid-column: 1 / -1;
+}
+
 /* Responsive: Tablet */
 @media (max-width: 1200px) {
   .widgets-grid {

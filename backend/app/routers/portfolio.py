@@ -1,13 +1,14 @@
 """Endpoints para gestión de cartera."""
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, asc, and_, or_
 from typing import Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import logging
 import json
+import random
 
-from app.database import get_db, PortfolioItem
+from app.database import get_db, PortfolioItem, NewsItem
 from app.models import (
     PortfolioItemCreate,
     PortfolioItemResponse,
@@ -20,6 +21,7 @@ from app.database import TradingRecommendation as TradingRecommendationDB
 from app.services.trading_recommendations_service import TradingRecommendationsService
 from app.services.recommendation_audit_service import RecommendationAuditService
 from app.services.risk_service import RiskService
+from app.services.portfolio_insights_service import PortfolioInsightsService
 from sqlalchemy import and_, or_, desc, asc
 
 logger = logging.getLogger(__name__)
@@ -116,6 +118,48 @@ async def get_risk_dashboard(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error interno al calcular el dashboard de riesgo"
+        )
+
+
+@router.get("/professional-insights")
+async def get_professional_insights(
+    db: Session = Depends(get_db)
+):
+    """
+    Genera insights profesionales sobre la cartera usando IA.
+    El asistente analiza la cartera con el rol de un inversor profesional,
+    considerando noticias del sector y tendencias de mercado.
+    """
+    try:
+        portfolio_items_db = db.query(PortfolioItem).all()
+        portfolio_items = [PortfolioItemResponse.model_validate(item) for item in portfolio_items_db]
+        
+        if not portfolio_items:
+            return {"insights": []}
+        
+        # Calcular valor total de la cartera
+        risk_service = RiskService()
+        portfolio_value = risk_service.calculate_portfolio_value(portfolio_items)
+        
+        # Contar noticias recientes (últimas 7 días)
+        recent_cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+        recent_news_count = db.query(NewsItem).filter(NewsItem.created_at >= recent_cutoff).count()
+        
+        # Generar insights profesionales
+        insights_service = PortfolioInsightsService()
+        insights = insights_service.generate_professional_insights(
+            portfolio_items=portfolio_items,
+            portfolio_value=portfolio_value,
+            recent_news_count=recent_news_count
+        )
+        
+        return {"insights": insights}
+        
+    except Exception as e:
+        logger.error(f"Error al generar insights profesionales: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno al generar insights profesionales"
         )
 
 
@@ -554,5 +598,81 @@ async def get_recommendation_statistics(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error interno al obtener estadísticas: {str(e)}"
+        )
+
+
+@router.get("/{item_id}/price-history")
+async def get_price_history(
+    item_id: int,
+    days: int = Query(60, description="Número de días de historial", ge=1, le=365),
+    db: Session = Depends(get_db)
+):
+    """
+    Obtiene historial de precios para un activo de la cartera.
+    
+    Nota: Esta es una implementación mock. En producción, integrar con API de precios real.
+    Genera datos simulados basados en el precio actual del activo si está disponible.
+    """
+    try:
+        item = db.query(PortfolioItem).filter(PortfolioItem.id == item_id).first()
+        
+        if not item:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Item de cartera con ID {item_id} no encontrado"
+            )
+        
+        # Intentar obtener precio base del item
+        base_price = 100.0  # Precio base por defecto
+        if item.price:
+            try:
+                base_price = float(item.price.replace(',', ''))
+            except (ValueError, AttributeError):
+                pass
+        elif item.total_value and item.quantity:
+            try:
+                total = float(item.total_value.replace(',', ''))
+                qty = float(item.quantity.replace(',', ''))
+                if qty > 0:
+                    base_price = total / qty
+            except (ValueError, AttributeError):
+                pass
+        
+        # Generar datos históricos simulados
+        price_history = []
+        end_date = datetime.now(timezone.utc)
+        current_price = base_price
+        
+        for i in range(days):
+            date = end_date - timedelta(days=days - i - 1)
+            # Simular variación de precio (random walk con tendencia)
+            change_pct = random.uniform(-0.02, 0.02)  # ±2% diario
+            current_price = current_price * (1 + change_pct)
+            current_price = max(current_price, base_price * 0.5)  # No bajar más del 50%
+            current_price = min(current_price, base_price * 1.5)  # No subir más del 50%
+            
+            price_history.append({
+                "date": date.isoformat(),
+                "price": round(current_price, 2)
+            })
+        
+        logger.info(f"Historial de precios generado para item {item_id}: {days} días")
+        
+        return {
+            "item_id": item_id,
+            "symbol": item.symbol,
+            "name": item.name,
+            "data": price_history,
+            "days": days,
+            "note": "Datos simulados - En producción, usar API de precios real"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error al obtener historial de precios para item {item_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno al obtener historial de precios"
         )
 
