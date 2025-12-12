@@ -20,6 +20,39 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/news", tags=["news"])
 
 
+def build_news_item_response(db_item: NewsItem) -> NewsItemResponse:
+    """
+    Construye un NewsItemResponse desde un objeto NewsItem de la BD.
+    Maneja correctamente el parseo de standardized_data que está almacenado como JSON string.
+    """
+    # Construir diccionario manualmente para evitar problemas con standardized_data
+    item_dict = {
+        "id": db_item.id,
+        "title": db_item.title,
+        "body": db_item.body,
+        "source": db_item.source,
+        "created_at": db_item.created_at.isoformat() if isinstance(db_item.created_at, datetime) else str(db_item.created_at),
+        "score": db_item.score,
+        "score_components": db_item.score_components,
+        "is_obsolete": db_item.is_obsolete,
+        "standardized_data": None
+    }
+    
+    # Parsear standardized_data si existe
+    if db_item.standardized_data:
+        try:
+            if isinstance(db_item.standardized_data, str):
+                standardized_dict = json.loads(db_item.standardized_data)
+            else:
+                standardized_dict = db_item.standardized_data
+            item_dict["standardized_data"] = StandardizedNewsData(**standardized_dict)
+        except (json.JSONDecodeError, TypeError, Exception) as e:
+            logger.warning(f"Error parseando standardized_data para noticia {db_item.id}: {e}")
+            item_dict["standardized_data"] = None
+    
+    return NewsItemResponse(**item_dict)
+
+
 @router.post("/standardize", response_model=NewsItemResponse, status_code=status.HTTP_201_CREATED)
 async def save_standardized_news(
     request: Request,
@@ -59,7 +92,7 @@ async def save_standardized_news(
         logger.info(f"Noticia estandarizada creada: ID {db_item.id}, título: {standardized_data.title}")
         
         # Construir respuesta con datos estandarizados
-        response = NewsItemResponse.model_validate(db_item)
+        response = build_news_item_response(db_item)
         response.standardized_data = standardized_data
         
         return response
@@ -155,15 +188,7 @@ async def list_news(
         scoring_service = NewsScoringService()
         news_items = []
         for item in all_items:
-            response_item = NewsItemResponse.model_validate(item)
-            # Parsear standardized_data si existe
-            if item.standardized_data:
-                try:
-                    standardized_dict = json.loads(item.standardized_data)
-                    response_item.standardized_data = StandardizedNewsData(**standardized_dict)
-                except (json.JSONDecodeError, Exception) as e:
-                    logger.warning(f"Error parseando standardized_data para noticia {item.id}: {e}")
-                    response_item.standardized_data = None
+            response_item = build_news_item_response(item)
             news_items.append(response_item)
         
         if sort_by == "score" and portfolio_items:
@@ -226,7 +251,7 @@ async def update_news(
         db.refresh(db_item)
         
         logger.info(f"Noticia actualizada: ID {news_id}")
-        return NewsItemResponse.model_validate(db_item)
+        return build_news_item_response(db_item)
         
     except HTTPException:
         raise
@@ -335,8 +360,11 @@ async def get_situation_summary(
                 tokens_used=None
             )
         
-        # Convertir a modelos de respuesta
-        news_responses = [NewsItemResponse.model_validate(item) for item in news_items]
+        # Convertir a modelos de respuesta, parseando standardized_data si existe
+        news_responses = []
+        for item in news_items:
+            response_item = build_news_item_response(item)
+            news_responses.append(response_item)
         
         # Generar resumen
         summary_service = SituationSummaryService()

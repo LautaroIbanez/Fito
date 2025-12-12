@@ -6,9 +6,16 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import logging
 
-from app.config import validate_config, RATE_LIMIT_PER_MINUTE
+from app.config import (
+    validate_config, 
+    RATE_LIMIT_PER_MINUTE,
+    OPENAI_MODEL,
+    OPENAI_TEMPERATURE,
+    OPENAI_MAX_TOKENS,
+    validate_openai_model
+)
 from app.database import init_db
-from app.routers import news, analysis, portfolio, suggestions, opportunities, normalized_news
+from app.routers import news, analysis, portfolio, suggestions, opportunities, normalized_news, scenarios
 
 # Validar configuración antes de iniciar
 validate_config()
@@ -20,6 +27,22 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger(__name__)
+
+# Verificar y loguear configuración del modelo OpenAI
+is_valid_model, model_message = validate_openai_model()
+if is_valid_model:
+    logger.info("=" * 60)
+    logger.info("CONFIGURACIÓN DE OPENAI:")
+    logger.info(f"  Modelo: {OPENAI_MODEL}")
+    logger.info(f"  Temperatura: {OPENAI_TEMPERATURE}")
+    logger.info(f"  Máximo de tokens: {OPENAI_MAX_TOKENS}")
+    logger.info(f"  Estado: {model_message}")
+    logger.info("=" * 60)
+else:
+    logger.warning("=" * 60)
+    logger.warning("ADVERTENCIA DE CONFIGURACIÓN DE OPENAI:")
+    logger.warning(f"  {model_message}")
+    logger.warning("=" * 60)
 
 # Inicializar base de datos
 init_db()
@@ -59,6 +82,7 @@ app.include_router(portfolio.router, prefix="/api")
 app.include_router(suggestions.router, prefix="/api")
 app.include_router(opportunities.router, prefix="/api")
 app.include_router(normalized_news.router, prefix="/api")
+app.include_router(scenarios.router, prefix="/api")
 
 
 @app.get("/")

@@ -1,0 +1,245 @@
+.hoy-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-5);
+  padding: var(--spacing-4);
+}
+
+.hoy-block {
+  background: white;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-5);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.hoy-block h2 {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  margin-bottom: var(--spacing-4);
+  color: #1a1a1a;
+}
+
+.hoy-block h3 {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--spacing-2);
+  color: #1a1a1a;
+}
+
+/* Grid para bloques secundarios */
+.hoy-blocks-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-5);
+}
+
+/* Qué pasó hoy - ocupa 2 columnas */
+.que-paso-hoy {
+  grid-column: 1 / -1;
+}
+
+.summary-text p,
+.why-text p {
+  margin-bottom: var(--spacing-3);
+  line-height: 1.6;
+  color: #333333;
+}
+
+/* Top activos */
+.assets-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.asset-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3);
+  background: var(--color-gray-50);
+  border-radius: var(--radius-md);
+}
+
+.asset-rank {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-green-600);
+  min-width: 2rem;
+}
+
+.asset-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
+.asset-info strong {
+  color: #1a1a1a;
+}
+
+.sensitivity {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.sensitivity.positive {
+  color: var(--color-green-600);
+}
+
+.sensitivity.negative {
+  color: var(--color-error);
+}
+
+.confidence {
+  font-size: var(--font-size-sm);
+  color: #4a4a4a;
+}
+
+/* Escenarios */
+.scenarios-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+}
+
+.scenario-driver {
+  padding: var(--spacing-4);
+  background: var(--color-gray-50);
+  border-radius: var(--radius-md);
+}
+
+.driver-description {
+  margin-bottom: var(--spacing-4);
+  color: #333333;
+  font-size: var(--font-size-sm);
+}
+
+.scenario-types {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-3);
+}
+
+.scenario-card {
+  padding: var(--spacing-3);
+  border-radius: var(--radius-md);
+  border: 2px solid;
+}
+
+.scenario-card.base {
+  background: var(--color-info-bg);
+  border-color: var(--color-info);
+}
+
+.scenario-card.risk {
+  background: var(--color-error-bg);
+  border-color: var(--color-error-border);
+}
+
+.scenario-card.opportunity {
+  background: var(--color-green-50);
+  border-color: var(--color-green-200);
+}
+
+.scenario-card h4 {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--spacing-2);
+  color: #1a1a1a;
+}
+
+.scenario-card p {
+  font-size: var(--font-size-sm);
+  color: #333333;
+  margin-bottom: var(--spacing-2);
+}
+
+.scenario-card .confidence {
+  color: #4a4a4a;
+  font-size: var(--font-size-sm);
+}
+
+/* Acciones rápidas */
+.acciones-rapidas {
+  grid-column: 1 / -1;
+}
+
+.actions-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-3);
+}
+
+.action-button {
+  padding: var(--spacing-4);
+  background: var(--color-green-600);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.action-button:hover {
+  background: var(--color-green-700);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.empty-state {
+  color: #666666;
+  font-style: italic;
+  text-align: center;
+  padding: var(--spacing-4);
+}
+
+.loading,
+.error {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: var(--spacing-8);
+}
+
+.loading-spinner {
+  font-size: var(--font-size-xl);
+}
+
+.error-message {
+  color: var(--color-red-600);
+  margin-bottom: var(--spacing-4);
+}
+
+.retry-button {
+  padding: var(--spacing-3) var(--spacing-6);
+  background: var(--color-green-600);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .scenario-types {
+    grid-template-columns: 1fr;
+  }
+  
+  .actions-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .hoy-view {
+    grid-template-columns: 1fr;
+  }
+  
+  .que-paso-hoy,
+  .acciones-rapidas {
+    grid-column: 1;
+  }
+}

@@ -1047,3 +1047,76 @@ class NormalizedNewsListResponse(BaseModel):
     valid_count: int
     error_count: int
     warning_count: int
+
+
+# ==================== Scenario Engine Models ====================
+
+class ScenarioAssumption(BaseModel):
+    """Supuesto de un escenario."""
+    description: str = Field(..., description="Descripción del supuesto")
+    probability: Optional[float] = Field(None, ge=0.0, le=1.0, description="Probabilidad estimada (0.0-1.0)")
+    timeframe: Optional[str] = Field(None, description="Horizonte temporal del supuesto")
+
+
+class ScenarioInvalidator(BaseModel):
+    """Invalidador de un escenario (condición que invalida el escenario)."""
+    condition: str = Field(..., description="Condición que invalida el escenario")
+    description: str = Field(..., description="Descripción de por qué invalida")
+
+
+class ScenarioRisk(BaseModel):
+    """Riesgo asociado a un escenario."""
+    description: str = Field(..., description="Descripción del riesgo")
+    severity: str = Field(..., description="Severidad: high, medium, low")
+    mitigation: Optional[str] = Field(None, description="Estrategia de mitigación")
+
+
+class Scenario(BaseModel):
+    """Escenario generado para un driver."""
+    scenario_type: str = Field(..., description="Tipo: base, risk, opportunity")
+    title: str = Field(..., description="Título del escenario")
+    description: str = Field(..., description="Descripción detallada del escenario")
+    assumptions: List[ScenarioAssumption] = Field(default_factory=list, description="Supuestos del escenario")
+    risks: List[ScenarioRisk] = Field(default_factory=list, description="Riesgos asociados")
+    invalidators: List[ScenarioInvalidator] = Field(default_factory=list, description="Invalidadores del escenario")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Nivel de confianza (0.0-1.0)")
+    timeframe: Optional[str] = Field(None, description="Horizonte temporal del escenario")
+
+
+class PortfolioAssetMapping(BaseModel):
+    """Mapeo de un escenario a activos de la cartera."""
+    asset_type: str = Field(..., description="Tipo de activo: ticker, sector, fx")
+    identifier: str = Field(..., description="Ticker, sector o par FX")
+    name: Optional[str] = Field(None, description="Nombre del activo/sector")
+    sensitivity: float = Field(..., ge=-1.0, le=1.0, description="Sensibilidad (-1.0 a 1.0, negativo=bajista, positivo=alcista)")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confianza en el mapeo (0.0-1.0)")
+    impact_description: Optional[str] = Field(None, description="Descripción del impacto esperado")
+
+
+class DriverScenarioResponse(BaseModel):
+    """Respuesta completa para un driver con sus escenarios."""
+    driver: str = Field(..., description="Nombre del driver temático")
+    driver_description: str = Field(..., description="Descripción del driver")
+    related_news_ids: List[int] = Field(default_factory=list, description="IDs de noticias relacionadas")
+    scenarios: Dict[str, Scenario] = Field(..., description="Escenarios: base, risk, opportunity")
+    portfolio_mappings: List[PortfolioAssetMapping] = Field(default_factory=list, description="Mapeo a cartera")
+    generated_at: str = Field(..., description="Fecha de generación")
+    metadata: Optional[Dict] = Field(default_factory=dict, description="Metadatos adicionales")
+
+
+class ScenarioEngineRequest(BaseModel):
+    """Modelo para solicitar generación de escenarios."""
+    news_ids: Optional[List[int]] = Field(None, description="IDs específicos de noticias. Si es None, usa todas las estandarizadas")
+    max_drivers: int = Field(5, ge=1, le=20, description="Máximo de drivers a generar")
+    include_portfolio_mapping: bool = Field(True, description="Incluir mapeo a cartera")
+
+
+class ScenarioEngineResponse(BaseModel):
+    """Respuesta del motor de escenarios."""
+    drivers: List[DriverScenarioResponse] = Field(..., description="Lista de drivers con escenarios")
+    total_drivers: int = Field(..., description="Total de drivers generados")
+    total_news_analyzed: int = Field(..., description="Total de noticias analizadas")
+    generated_at: str = Field(..., description="Fecha de generación")
+    partial_results: bool = Field(False, description="Si hay resultados parciales por timeout")
+    missing_fields: List[str] = Field(default_factory=list, description="Campos faltantes si hay fallback")
+    warnings: List[str] = Field(default_factory=list, description="Advertencias del procesamiento")

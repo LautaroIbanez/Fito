@@ -1,9 +1,12 @@
-import { useState, useEffect, Component, ReactNode } from 'react'
-import NewsWidget from './components/NewsWidget'
-import AssistantWidget from './components/AssistantWidget'
-import PortfolioWidget from './components/PortfolioWidget'
-import PortfolioSummaryCard from './components/PortfolioSummaryCard'
-import { newsApi, NewsItem } from './services/api'
+import { useState, Component, ReactNode } from 'react'
+import Navigation, { View } from './components/Navigation'
+import HoyView from './views/HoyView'
+import SenalesView from './views/SenalesView'
+import ActivoView from './views/ActivoView'
+import Modal from './components/Modal'
+import NewsForm from './components/NewsForm'
+import PortfolioForm from './components/PortfolioForm'
+import { newsApi, portfolioApi, PortfolioItemCreate } from './services/api'
 import './App.css'
 
 // Error Boundary para capturar errores de renderizado
@@ -76,28 +79,43 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 }
 
 function App() {
-  const [newsItems, setNewsItems] = useState<NewsItem[]>([])
-  const [portfolioRefreshTrigger, setPortfolioRefreshTrigger] = useState(0)
-  const [newsRefreshTrigger, setNewsRefreshTrigger] = useState(0)
-  const [error, setError] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [currentView, setCurrentView] = useState<View>('hoy')
+  const [isNewsModalOpen, setIsNewsModalOpen] = useState(false)
+  const [isPortfolioModalOpen, setIsPortfolioModalOpen] = useState(false)
+  const [isSubmittingNews, setIsSubmittingNews] = useState(false)
+  const [isSubmittingPortfolio, setIsSubmittingPortfolio] = useState(false)
 
-  // Cargar noticias al iniciar
-  useEffect(() => {
-    loadNews()
-  }, [])
+  const handleAddNews = () => {
+    setIsNewsModalOpen(true)
+  }
 
-  const loadNews = async () => {
+  const handleManagePortfolio = () => {
+    setIsPortfolioModalOpen(true)
+  }
+
+  const handleNewsSubmit = async (title: string, body: string, source: string) => {
+    setIsSubmittingNews(true)
     try {
-      setIsLoading(true)
-      const items = await newsApi.list('score')
-      setNewsItems(items)
-      setNewsRefreshTrigger(prev => prev + 1)
+      await newsApi.create({ title, body, source })
+      setIsNewsModalOpen(false)
+      // La vista HOY se actualizará automáticamente al recargar
     } catch (err: any) {
-      console.error('Error al cargar noticias:', err)
-      setError(`Error al conectar con el backend: ${err.message}`)
+      throw new Error(err.message || 'Error al guardar la noticia')
     } finally {
-      setIsLoading(false)
+      setIsSubmittingNews(false)
+    }
+  }
+
+  const handlePortfolioSubmit = async (item: PortfolioItemCreate) => {
+    setIsSubmittingPortfolio(true)
+    try {
+      await portfolioApi.create(item)
+      setIsPortfolioModalOpen(false)
+      // La vista HOY se actualizará automáticamente al recargar
+    } catch (err: any) {
+      throw new Error(err.message || 'Error al guardar el activo')
+    } finally {
+      setIsSubmittingPortfolio(false)
     }
   }
 
@@ -110,58 +128,44 @@ function App() {
         </header>
 
         <main className="app-main">
-          {error && (
-            <div style={{ 
-              background: '#fee2e2', 
-              color: '#dc2626', 
-              padding: '12px', 
-              borderRadius: '8px',
-              marginBottom: '20px'
-            }}>
-              ⚠️ {error}
-            </div>
+          <Navigation currentView={currentView} onViewChange={setCurrentView} />
+          
+          {currentView === 'hoy' && (
+            <HoyView 
+              onAddNews={handleAddNews}
+              onManagePortfolio={handleManagePortfolio}
+            />
           )}
-          {isLoading && (
-            <div style={{ 
-              background: 'white', 
-              padding: '20px', 
-              borderRadius: '8px',
-              marginBottom: '20px',
-              textAlign: 'center'
-            }}>
-              Cargando...
-            </div>
-          )}
-          <div className="widgets-grid">
-            <div className="summary-section">
-              <PortfolioSummaryCard refreshTrigger={portfolioRefreshTrigger} />
-            </div>
-            
-            <PortfolioWidget 
-              onUpdate={() => {
-                setPortfolioRefreshTrigger(prev => prev + 1)
-              }}
-              refreshTrigger={portfolioRefreshTrigger}
-            />
-            
-            <NewsWidget
-              refreshTrigger={newsRefreshTrigger}
-              maxItems={10}
-              sortBy="score"
-              onUpdate={() => {
-                setNewsRefreshTrigger(prev => prev + 1)
-              }}
-            />
-            
-            <AssistantWidget
-              refreshTrigger={newsRefreshTrigger}
-              maxItems={10}
-              onUpdate={() => {
-                // Actualizar cuando el asistente genera nuevos análisis
-              }}
-            />
-          </div>
+          
+          {currentView === 'senales' && <SenalesView />}
+          
+          {currentView === 'activo' && <ActivoView />}
         </main>
+
+        {/* Modal para agregar noticia */}
+        <Modal
+          isOpen={isNewsModalOpen}
+          onClose={() => setIsNewsModalOpen(false)}
+          title="Agregar Noticia"
+        >
+          <NewsForm
+            onSubmit={handleNewsSubmit}
+            isSubmitting={isSubmittingNews}
+          />
+        </Modal>
+
+        {/* Modal para gestionar cartera */}
+        <Modal
+          isOpen={isPortfolioModalOpen}
+          onClose={() => setIsPortfolioModalOpen(false)}
+          title="Agregar Activo a la Cartera"
+        >
+          <PortfolioForm
+            onSubmit={handlePortfolioSubmit}
+            onCancel={() => setIsPortfolioModalOpen(false)}
+            isSubmitting={isSubmittingPortfolio}
+          />
+        </Modal>
       </div>
     </ErrorBoundary>
   )

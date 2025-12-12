@@ -13,6 +13,7 @@ from app.models import PortfolioItemResponse, NewsItemResponse
 from app.services.news_scoring_service import NewsScoringService
 from app.services.sector_extraction_service import SectorExtractionService
 from app.services.market_features_service import MarketFeaturesService
+from app.services.multi_asset_scoring_service import MultiAssetScoringService
 from app.config import (
     PORTFOLIO_RANKING_SENTIMENT_WEIGHT,
     PORTFOLIO_RANKING_TECHNICAL_WEIGHT,
@@ -32,6 +33,7 @@ class PortfolioRankingService:
         self.news_scoring_service = NewsScoringService()
         self.sector_extractor = SectorExtractionService()
         self.market_features_service = MarketFeaturesService()
+        self.multi_asset_scoring = MultiAssetScoringService()
         self._cache: Dict[int, Dict] = {}
         self._cache_timestamps: Dict[int, datetime] = {}
     
@@ -65,26 +67,58 @@ class PortfolioRankingService:
                 logger.debug(f"Ranking calculado para item {item.id}: score={ranking.get('composite_score', 'N/A')}, color={ranking.get('color', 'N/A')}")
             except Exception as e:
                 logger.error(f"Error calculando ranking para item {item.id} ({item.name}): {e}", exc_info=True)
-                # Fallback: ranking neutro
+                # Fallback: marcar explícitamente datos insuficientes
                 rankings.append({
                     "item_id": item.id,
                     "symbol": item.symbol,
                     "name": item.name,
+                    "asset_type": item.asset_type,
                     "composite_score": 50.0,
                     "sentiment_score": 50.0,
                     "technical_score": 50.0,
                     "color": "amber",
-                    "status_text": "Datos insuficientes",
+                    "status_text": "DATOS INSUFICIENTES",
+                    "action_recommendation": "Error al calcular ranking. Verificar datos disponibles.",
+                    "data_sufficiency": {
+                        "sufficient": False,
+                        "message": "DATOS INSUFICIENTES",
+                        "details": {
+                            "news": f"Error: {str(e)}",
+                            "technical": "Error al calcular señales técnicas"
+                        },
+                        "recommendation": "Revisar configuración y datos disponibles"
+                    },
                     "details": {
-                        "sentiment": {"score": 50.0, "explanation": "Error al calcular sentimiento"},
-                        "technical": {"score": 50.0, "explanation": "Error al calcular señales técnicas"},
-                        "error": str(e)
+                        "sentiment": {
+                            "score": 50.0,
+                            "explanation": f"Error al calcular sentimiento: {str(e)}",
+                            "data_quality": "insufficient"
+                        },
+                        "technical": {
+                            "score": 50.0,
+                            "explanation": f"Error al calcular señales técnicas: {str(e)}",
+                            "data_quality": "insufficient"
+                        },
+                        "freshness": {
+                            "score": 0.0,
+                            "data_quality": "insufficient",
+                            "message": "Error al calcular frescura"
+                        },
+                        "coverage": {
+                            "score": 0.0,
+                            "data_quality": "insufficient",
+                            "message": "Error al calcular cobertura"
+                        }
                     }
                 })
         
         logger.info(f"Rankings generados: {len(rankings)} items")
-        # Ordenar por composite_score descendente
-        rankings.sort(key=lambda x: x["composite_score"], reverse=True)
+        # Ordenar por riesgo/oportunidad: primero por suficiencia de datos (suficientes primero),
+        # luego por composite_score descendente
+        rankings.sort(key=lambda x: (
+            not x.get("data_sufficiency", {}).get("sufficient", False),  # Datos suficientes primero
+            -x["composite_score"]  # Luego por score descendente
+        ))
         
         return rankings
     
@@ -93,45 +127,66 @@ class PortfolioRankingService:
         db: Session,
         item: PortfolioItemResponse
     ) -> Dict:
-        """Calcula ranking para un item específico."""
+        """Calcula ranking para un item específico usando scoring diferenciado por tipo de activo."""
         # Verificar caché
         cache_key = item.id
         if self._is_cache_valid(cache_key):
             return self._cache[cache_key]
         
-        # Calcular sentimiento
-        sentiment_result = self._calculate_sentiment_score(db, item)
+        # Obtener noticias relacionadas
+        lookback_hours = PORTFOLIO_RANKING_NEWS_LOOKBACK_HOURS
+        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
         
-        # Calcular señales técnicas
-        technical_result = self._calculate_technical_score(item)
+        company_news = self._fetch_company_news(db, item, cutoff_time)
+        sector_news = self._fetch_sector_news(db, item, cutoff_time)
+        all_news = company_news + sector_news
         
-        # Combinar scores
-        composite_score = (
-            sentiment_result["score"] * PORTFOLIO_RANKING_SENTIMENT_WEIGHT +
-            technical_result["score"] * PORTFOLIO_RANKING_TECHNICAL_WEIGHT
+        # Usar scoring diferenciado por tipo de activo
+        asset_score_result = self.multi_asset_scoring.calculate_asset_score(
+            db, item, all_news, lookback_hours
         )
         
+        # Extraer información del resultado
+        composite_score = asset_score_result["composite_score"]
+        breakdown = asset_score_result["breakdown"]
+        data_sufficiency = asset_score_result["data_sufficiency"]
+        
         # Mapear a color y obtener recomendación
-        color, status_text, action_recommendation = self._map_to_traffic_light(composite_score, sentiment_result, technical_result)
+        # Usar breakdown para determinar calidad de datos
+        sentiment_breakdown = breakdown.get("sentiment", {})
+        technical_breakdown = breakdown.get("technical", {})
+        
+        color, status_text, action_recommendation = self._map_to_traffic_light_with_sufficiency(
+            composite_score, 
+            sentiment_breakdown, 
+            technical_breakdown,
+            data_sufficiency
+        )
         
         # Timestamp de actualización
         updated_at = datetime.now(timezone.utc)
         
-        # Calcular contribución de cada factor al score final
-        sentiment_contribution = sentiment_result["score"] * PORTFOLIO_RANKING_SENTIMENT_WEIGHT * 100
-        technical_contribution = technical_result["score"] * PORTFOLIO_RANKING_TECHNICAL_WEIGHT * 100
+        # Calcular contribuciones y empujes desde breakdown
+        sentiment_contribution = breakdown.get("sentiment", {}).get("contribution", 0.0) * 100
+        technical_contribution = breakdown.get("technical", {}).get("contribution", 0.0) * 100
+        freshness_contribution = breakdown.get("freshness", {}).get("contribution", 0.0) * 100
+        coverage_contribution = breakdown.get("coverage", {}).get("contribution", 0.0) * 100
         
-        # Calcular desviación desde neutro (50) para mostrar empuje
-        sentiment_push = (sentiment_result["score"] * 100) - 50
-        technical_push = (technical_result["score"] * 100) - 50
+        sentiment_score = breakdown.get("sentiment", {}).get("score", 0.5)
+        technical_score = breakdown.get("technical", {}).get("score", 0.5)
         
+        sentiment_push = (sentiment_score * 100) - 50
+        technical_push = (technical_score * 100) - 50
+        
+        # Construir ranking con desglose completo
         ranking = {
             "item_id": item.id,
             "symbol": item.symbol,
             "name": item.name,
+            "asset_type": item.asset_type,
             "composite_score": round(composite_score * 100, 1),  # Convertir a 0-100 para display
-            "sentiment_score": round(sentiment_result["score"] * 100, 1),  # Convertir a 0-100
-            "technical_score": round(technical_result["score"] * 100, 1),  # Convertir a 0-100
+            "sentiment_score": round(sentiment_score * 100, 1),  # Convertir a 0-100
+            "technical_score": round(technical_score * 100, 1),  # Convertir a 0-100
             "color": color,
             "status_text": status_text,
             "action_recommendation": action_recommendation,
@@ -144,37 +199,55 @@ class PortfolioRankingService:
                 "green_max": 100
             },
             "weights": {
-                "sentiment": PORTFOLIO_RANKING_SENTIMENT_WEIGHT,
-                "technical": PORTFOLIO_RANKING_TECHNICAL_WEIGHT
+                "sentiment": breakdown.get("sentiment", {}).get("weight", 0.0),
+                "technical": breakdown.get("technical", {}).get("weight", 0.0),
+                "freshness": breakdown.get("freshness", {}).get("weight", 0.0),
+                "coverage": breakdown.get("coverage", {}).get("weight", 0.0)
             },
             "contributions": {
                 "sentiment": round(sentiment_contribution, 1),
-                "technical": round(technical_contribution, 1)
+                "technical": round(technical_contribution, 1),
+                "freshness": round(freshness_contribution, 1),
+                "coverage": round(coverage_contribution, 1)
             },
             "factor_push": {
                 "sentiment": round(sentiment_push, 1),
                 "technical": round(technical_push, 1)
             },
+            "data_sufficiency": data_sufficiency,
             "details": {
                 "sentiment": {
-                    "score": round(sentiment_result["score"] * 100, 1),  # 0-100 para display
-                    "explanation": sentiment_result["explanation"],
-                    "company_news_count": sentiment_result.get("company_news_count", 0),
-                    "sector_news_count": sentiment_result.get("sector_news_count", 0),
-                    "headlines": sentiment_result.get("headlines", []),
-                    "data_quality": sentiment_result.get("data_quality", "unknown"),
-                    "last_news_date": sentiment_result.get("last_news_date"),
-                    "indicators_used": sentiment_result.get("indicators_used", []),
-                    "reliability_note": sentiment_result.get("reliability_note")
+                    "score": round(sentiment_score * 100, 1),
+                    "explanation": sentiment_breakdown.get("details", {}).get("message", ""),
+                    "company_news_count": sentiment_breakdown.get("details", {}).get("news_count", 0),
+                    "sector_news_count": 0,  # Se puede expandir
+                    "headlines": [],
+                    "data_quality": sentiment_breakdown.get("details", {}).get("data_quality", "unknown"),
+                    "positive_count": sentiment_breakdown.get("details", {}).get("positive_count", 0),
+                    "negative_count": sentiment_breakdown.get("details", {}).get("negative_count", 0),
+                    "neutral_count": sentiment_breakdown.get("details", {}).get("neutral_count", 0),
+                    "avg_sentiment": sentiment_breakdown.get("details", {}).get("avg_sentiment", 0.0)
                 },
                 "technical": {
-                    "score": round(technical_result["score"] * 100, 1),  # 0-100 para display
-                    "explanation": technical_result["explanation"],
-                    "signals": technical_result.get("signals", {}),
-                    "data_quality": technical_result.get("data_quality", "unknown"),
-                    "last_update": technical_result.get("last_update"),
-                    "indicators_used": technical_result.get("indicators_used", []),
-                    "reliability_note": technical_result.get("reliability_note")
+                    "score": round(technical_score * 100, 1),
+                    "explanation": technical_breakdown.get("details", {}).get("message", ""),
+                    "signals": technical_breakdown.get("details", {}).get("signals", {}),
+                    "data_quality": technical_breakdown.get("details", {}).get("data_quality", "unknown"),
+                    "indicators_used": list(technical_breakdown.get("details", {}).get("signals", {}).keys())
+                },
+                "freshness": {
+                    "score": round(breakdown.get("freshness", {}).get("score", 0.0) * 100, 1),
+                    "avg_age_hours": breakdown.get("freshness", {}).get("details", {}).get("avg_age_hours"),
+                    "newest_age_hours": breakdown.get("freshness", {}).get("details", {}).get("newest_age_hours"),
+                    "data_quality": breakdown.get("freshness", {}).get("details", {}).get("data_quality", "unknown"),
+                    "message": breakdown.get("freshness", {}).get("details", {}).get("message", "")
+                },
+                "coverage": {
+                    "score": round(breakdown.get("coverage", {}).get("score", 0.0) * 100, 1),
+                    "news_count": breakdown.get("coverage", {}).get("details", {}).get("news_count", 0),
+                    "technical_signals_count": breakdown.get("coverage", {}).get("details", {}).get("technical_signals_count", 0),
+                    "data_quality": breakdown.get("coverage", {}).get("details", {}).get("data_quality", "unknown"),
+                    "message": breakdown.get("coverage", {}).get("details", {}).get("message", "")
                 }
             }
         }
@@ -666,22 +739,31 @@ class PortfolioRankingService:
             "reliability_note": reliability_note
         }
     
-    def _map_to_traffic_light(
+    def _map_to_traffic_light_with_sufficiency(
         self,
         composite_score: float,
-        sentiment_result: Dict,
-        technical_result: Dict
+        sentiment_breakdown: Dict,
+        technical_breakdown: Dict,
+        data_sufficiency: Dict
     ) -> Tuple[str, str, str]:
         """
-        Mapea composite_score a color de semáforo, texto de estado y recomendación de acción.
+        Mapea composite_score a color de semáforo considerando suficiencia de datos.
         
         Returns:
             Tuple[color, status_text, action_recommendation]
         """
+        # Si datos insuficientes, marcar explícitamente
+        if not data_sufficiency.get("sufficient", False):
+            return (
+                "amber",
+                "DATOS INSUFICIENTES",
+                data_sufficiency.get("recommendation", "Esperar más datos antes de tomar decisiones")
+            )
+        
         # Generar explicación rápida para estado neutro
         quick_reason = []
-        sentiment_quality = sentiment_result.get("data_quality", "unknown")
-        technical_quality = technical_result.get("data_quality", "unknown")
+        sentiment_quality = sentiment_breakdown.get("details", {}).get("data_quality", "unknown")
+        technical_quality = technical_breakdown.get("details", {}).get("data_quality", "unknown")
         
         if sentiment_quality == "insufficient":
             quick_reason.append("sin noticias")
@@ -696,7 +778,6 @@ class PortfolioRankingService:
             action_recommendation = "Mantener posición y monitorear indicadores clave"
         elif composite_score >= PORTFOLIO_RANKING_AMBER_THRESHOLD:
             color = "amber"
-            # Hacer el texto más descriptivo para neutro
             if quick_reason:
                 status_text = f"Neutro{reason_suffix}"
             else:
@@ -708,6 +789,26 @@ class PortfolioRankingService:
             action_recommendation = "Revisar soporte técnico y considerar reducción"
         
         return color, status_text, action_recommendation
+    
+    def _map_to_traffic_light(
+        self,
+        composite_score: float,
+        sentiment_result: Dict,
+        technical_result: Dict
+    ) -> Tuple[str, str, str]:
+        """
+        Mapea composite_score a color de semáforo (método legacy para compatibilidad).
+        
+        Returns:
+            Tuple[color, status_text, action_recommendation]
+        """
+        sentiment_breakdown = {"details": {"data_quality": sentiment_result.get("data_quality", "unknown")}}
+        technical_breakdown = {"details": {"data_quality": technical_result.get("data_quality", "unknown")}}
+        data_sufficiency = {"sufficient": True}
+        
+        return self._map_to_traffic_light_with_sufficiency(
+            composite_score, sentiment_breakdown, technical_breakdown, data_sufficiency
+        )
     
     def _is_cache_valid(self, cache_key: int) -> bool:
         """Verifica si el caché es válido."""

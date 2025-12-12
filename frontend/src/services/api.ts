@@ -303,6 +303,7 @@ export interface PortfolioRanking {
   item_id: number
   symbol?: string
   name: string
+  asset_type?: string
   composite_score: number
   sentiment_score: number
   technical_score: number
@@ -320,14 +321,27 @@ export interface PortfolioRanking {
   weights?: {
     sentiment: number
     technical: number
+    freshness?: number
+    coverage?: number
   }
   contributions?: {
     sentiment: number
     technical: number
+    freshness?: number
+    coverage?: number
   }
   factor_push?: {
     sentiment: number
     technical: number
+  }
+  data_sufficiency?: {
+    sufficient: boolean
+    message: string
+    details?: {
+      news?: string
+      technical?: string
+    }
+    recommendation?: string
   }
   details: {
     sentiment: {
@@ -346,6 +360,10 @@ export interface PortfolioRanking {
       lookback_days?: number
       company_last_date?: string
       sector_last_date?: string
+      positive_count?: number
+      negative_count?: number
+      neutral_count?: number
+      avg_sentiment?: number
     }
     technical: {
       score: number
@@ -362,6 +380,20 @@ export interface PortfolioRanking {
       indicators_used?: string[]
       reliability_note?: string
     }
+    freshness?: {
+      score: number
+      avg_age_hours?: number
+      newest_age_hours?: number
+      data_quality?: 'high' | 'medium' | 'low' | 'insufficient'
+      message?: string
+    }
+    coverage?: {
+      score: number
+      news_count?: number
+      technical_signals_count?: number
+      data_quality?: 'high' | 'medium' | 'low' | 'insufficient'
+      message?: string
+    }
   }
 }
 
@@ -369,6 +401,63 @@ export interface PortfolioRankings {
   rankings: PortfolioRanking[]
   total: number
   generated_at: string
+}
+
+export interface ScenarioData {
+  driver: string
+  driver_description: string
+  related_news_ids: number[]
+  scenarios: {
+    base?: { 
+      title: string
+      description: string
+      confidence: number
+      invalidators?: Array<{ condition: string; description: string }>
+    }
+    risk?: { 
+      title: string
+      description: string
+      confidence: number
+      invalidators?: Array<{ condition: string; description: string }>
+    }
+    opportunity?: { 
+      title: string
+      description: string
+      confidence: number
+      invalidators?: Array<{ condition: string; description: string }>
+    }
+  }
+  portfolio_mappings: Array<{
+    asset_type: string
+    identifier: string
+    name?: string
+    sensitivity: number
+    confidence: number
+  }>
+}
+
+export interface ScenarioEngineResponse {
+  drivers: ScenarioData[]
+  total_drivers: number
+  total_news_analyzed: number
+  generated_at: string
+  partial_results: boolean
+  missing_fields: string[]
+  warnings: string[]
+}
+
+export const scenariosApi = {
+  generate: async (params?: {
+    news_ids?: number[]
+    max_drivers?: number
+    include_portfolio_mapping?: boolean
+  }): Promise<ScenarioEngineResponse> => {
+    const response = await axios.post<ScenarioEngineResponse>(
+      `${API_BASE_URL}/scenarios`,
+      params || {}
+    )
+    return response.data
+  }
 }
 
 

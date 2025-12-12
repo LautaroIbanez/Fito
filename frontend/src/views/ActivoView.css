@@ -1,0 +1,241 @@
+.activo-view {
+  padding: var(--spacing-5);
+}
+
+.activo-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-6);
+}
+
+.activo-header h1 {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  color: white;
+}
+
+.refresh-button {
+  padding: var(--spacing-2) var(--spacing-4);
+  background: var(--color-green-600);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-weight: var(--font-weight-semibold);
+}
+
+.activo-content {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: var(--spacing-5);
+}
+
+.activo-list h2 {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--spacing-4);
+  color: #1a1a1a;
+}
+
+.items-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.item-button {
+  padding: var(--spacing-3);
+  background: white;
+  border: 2px solid var(--color-gray-200);
+  border-radius: var(--radius-md);
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.item-button > button {
+  width: 100%;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+}
+
+.item-actions {
+  display: flex;
+  gap: var(--spacing-2);
+  margin-top: var(--spacing-2);
+  padding-top: var(--spacing-2);
+  border-top: 1px solid var(--color-gray-200);
+}
+
+.item-action-button {
+  flex: 1;
+  padding: var(--spacing-2) var(--spacing-3);
+  border: 1px solid;
+  border-radius: var(--radius-sm);
+  background: white;
+  cursor: pointer;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-1);
+}
+
+.item-action-button.edit {
+  color: var(--color-green-700);
+  border-color: var(--color-green-300);
+}
+
+.item-action-button.edit:hover {
+  background: var(--color-green-50);
+  border-color: var(--color-green-600);
+  transform: translateY(-1px);
+}
+
+.item-action-button.delete {
+  color: var(--color-error);
+  border-color: var(--color-error-border);
+}
+
+.item-action-button.delete:hover {
+  background: var(--color-error-bg);
+  border-color: var(--color-error);
+  transform: translateY(-1px);
+}
+
+.item-button:hover {
+  border-color: var(--color-green-600);
+  background: var(--color-green-50);
+}
+
+.item-button.active {
+  border-color: var(--color-green-600);
+  background: var(--color-green-100);
+}
+
+.item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-1);
+}
+
+.item-header strong {
+  font-size: var(--font-size-base);
+  color: #1a1a1a;
+}
+
+.item-type {
+  font-size: var(--font-size-xs);
+  color: #4a4a4a;
+  text-transform: uppercase;
+}
+
+.item-value {
+  font-size: var(--font-size-sm);
+  color: #4a4a4a;
+  font-weight: var(--font-weight-semibold);
+}
+
+.activo-details {
+  background: white;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-5);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.activo-details h2 {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  margin-bottom: var(--spacing-5);
+  color: #1a1a1a;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-4);
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
+.detail-item.full-width {
+  grid-column: 1 / -1;
+}
+
+.detail-label {
+  font-size: var(--font-size-sm);
+  color: #4a4a4a;
+  font-weight: var(--font-weight-semibold);
+}
+
+.detail-value {
+  font-size: var(--font-size-base);
+  color: #1a1a1a;
+}
+
+.empty-state {
+  text-align: center;
+  padding: var(--spacing-8);
+  color: #666666;
+}
+
+.empty-state .hint {
+  margin-top: var(--spacing-2);
+  font-size: var(--font-size-sm);
+  color: #666666;
+}
+
+.loading,
+.error {
+  text-align: center;
+  padding: var(--spacing-8);
+}
+
+.loading-spinner {
+  font-size: var(--font-size-xl);
+}
+
+.error-message {
+  color: var(--color-error);
+  margin-bottom: var(--spacing-4);
+}
+
+.retry-button {
+  padding: var(--spacing-3) var(--spacing-6);
+  background: var(--color-green-600);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+@media (max-width: 1200px) {
+  .activo-content {
+    grid-template-columns: 1fr;
+  }
+  
+  .activo-list {
+    order: 2;
+  }
+  
+  .activo-details {
+    order: 1;
+  }
+}
+
+@media (max-width: 768px) {
+  .details-grid {
+    grid-template-columns: 1fr;
+  }
+}

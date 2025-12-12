@@ -77,7 +77,7 @@ class TestPortfolioRankingService:
         sentiment_result = {"score": 0.8, "explanation": "Positive news"}
         technical_result = {"score": 0.7, "explanation": "Strong signals"}
         
-        color, status_text = ranking_service._map_to_traffic_light(
+        color, status_text, action = ranking_service._map_to_traffic_light(
             0.75,  # Composite score alto
             sentiment_result,
             technical_result
@@ -85,13 +85,14 @@ class TestPortfolioRankingService:
         
         assert color == "green"
         assert status_text == "Favorable"
+        assert action is not None
     
     def test_map_to_traffic_light_amber(self, ranking_service):
         """Test que scores medios mapean a ámbar."""
         sentiment_result = {"score": 0.5, "explanation": "Neutral news"}
         technical_result = {"score": 0.5, "explanation": "Mixed signals"}
         
-        color, status_text = ranking_service._map_to_traffic_light(
+        color, status_text, action = ranking_service._map_to_traffic_light(
             0.50,  # Composite score medio
             sentiment_result,
             technical_result
@@ -99,13 +100,14 @@ class TestPortfolioRankingService:
         
         assert color == "amber"
         assert status_text == "Neutro"
+        assert action is not None
     
     def test_map_to_traffic_light_red(self, ranking_service):
         """Test que scores bajos mapean a rojo."""
         sentiment_result = {"score": 0.2, "explanation": "Negative news"}
         technical_result = {"score": 0.3, "explanation": "Weak signals"}
         
-        color, status_text = ranking_service._map_to_traffic_light(
+        color, status_text, action = ranking_service._map_to_traffic_light(
             0.25,  # Composite score bajo
             sentiment_result,
             technical_result
@@ -113,6 +115,7 @@ class TestPortfolioRankingService:
         
         assert color == "red"
         assert status_text == "Precaución"
+        assert action is not None
     
     def test_map_to_traffic_light_threshold_boundaries(self, ranking_service):
         """Test que los thresholds se aplican correctamente."""
@@ -120,7 +123,7 @@ class TestPortfolioRankingService:
         technical_result = {"score": 0.5, "explanation": "Test"}
         
         # Test en el threshold verde
-        color_green, _ = ranking_service._map_to_traffic_light(
+        color_green, _, _ = ranking_service._map_to_traffic_light(
             PORTFOLIO_RANKING_GREEN_THRESHOLD,
             sentiment_result,
             technical_result
@@ -128,7 +131,7 @@ class TestPortfolioRankingService:
         assert color_green == "green"
         
         # Test justo debajo del threshold verde
-        color_amber1, _ = ranking_service._map_to_traffic_light(
+        color_amber1, _, _ = ranking_service._map_to_traffic_light(
             PORTFOLIO_RANKING_GREEN_THRESHOLD - 0.01,
             sentiment_result,
             technical_result
@@ -136,7 +139,7 @@ class TestPortfolioRankingService:
         assert color_amber1 == "amber"
         
         # Test en el threshold ámbar
-        color_amber2, _ = ranking_service._map_to_traffic_light(
+        color_amber2, _, _ = ranking_service._map_to_traffic_light(
             PORTFOLIO_RANKING_AMBER_THRESHOLD,
             sentiment_result,
             technical_result
@@ -144,7 +147,7 @@ class TestPortfolioRankingService:
         assert color_amber2 == "amber"
         
         # Test justo debajo del threshold ámbar
-        color_red, _ = ranking_service._map_to_traffic_light(
+        color_red, _, _ = ranking_service._map_to_traffic_light(
             PORTFOLIO_RANKING_AMBER_THRESHOLD - 0.01,
             sentiment_result,
             technical_result
@@ -331,7 +334,7 @@ class TestScoreFusionEdgeCases:
             technical_result["score"] * PORTFOLIO_RANKING_TECHNICAL_WEIGHT
         )
         
-        color, _ = ranking_service._map_to_traffic_light(
+        color, _, _ = ranking_service._map_to_traffic_light(
             composite,
             sentiment_result,
             technical_result
@@ -352,7 +355,7 @@ class TestScoreFusionEdgeCases:
         
         assert abs(composite - 0.5) < 0.01  # Debe ser ~0.5
         
-        color, status_text = ranking_service._map_to_traffic_light(
+        color, status_text, action = ranking_service._map_to_traffic_light(
             composite,
             sentiment_result,
             technical_result
@@ -360,6 +363,7 @@ class TestScoreFusionEdgeCases:
         
         assert color == "amber"
         assert status_text == "Neutro"
+        assert action is not None
     
     def test_score_normalization_bounds(self, ranking_service):
         """Test que los scores están normalizados en 0-1."""
@@ -399,7 +403,7 @@ class TestMixedTechnicalSentimentCases:
             technical_result["score"] * PORTFOLIO_RANKING_TECHNICAL_WEIGHT
         )
         
-        color, _ = ranking_service._map_to_traffic_light(
+        color, _, _ = ranking_service._map_to_traffic_light(
             composite,
             sentiment_result,
             technical_result
@@ -417,7 +421,7 @@ class TestMixedTechnicalSentimentCases:
             technical_result["score"] * PORTFOLIO_RANKING_TECHNICAL_WEIGHT
         )
         
-        color, _ = ranking_service._map_to_traffic_light(
+        color, _, _ = ranking_service._map_to_traffic_light(
             composite,
             sentiment_result,
             technical_result
@@ -435,7 +439,7 @@ class TestMixedTechnicalSentimentCases:
             technical_result["score"] * PORTFOLIO_RANKING_TECHNICAL_WEIGHT
         )
         
-        color, _ = ranking_service._map_to_traffic_light(
+        color, _, _ = ranking_service._map_to_traffic_light(
             composite,
             sentiment_result,
             technical_result
