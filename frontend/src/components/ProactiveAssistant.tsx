@@ -46,17 +46,45 @@ export default function ProactiveAssistant({ onUpdate, autoLoad = true }: Proact
       setError(null)
       setIsDegraded(false)
 
-      // Cargar datos en paralelo con timeout
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Timeout: La generación excedió 30 segundos')), 30000)
+      // Cargar datos en paralelo con timeout aumentado a 90 segundos
+      // (el backend puede tardar más si hay que estandarizar noticias)
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout: La generación excedió 90 segundos')), 90000)
       )
 
+      // Wrapper para manejar errores de axios y otros errores
+      const safeGetSummary = async () => {
+        try {
+          return await newsApi.getSituationSummary()
+        } catch (err: any) {
+          console.warn('Error obteniendo resumen de situación:', err)
+          const errorMsg = err.response?.data?.detail || err.message || 'Error desconocido'
+          throw new Error(`Resumen: ${errorMsg}`)
+        }
+      }
+
+      const safeGenerateScenarios = async () => {
+        try {
+          return await scenariosApi.generate({ max_drivers: 3, include_portfolio_mapping: true })
+        } catch (err: any) {
+          console.warn('Error generando escenarios:', err)
+          const errorMsg = err.response?.data?.detail || err.message || 'Error desconocido'
+          throw new Error(`Escenarios: ${errorMsg}`)
+        }
+      }
+
       const dataPromise = Promise.allSettled([
-        newsApi.getSituationSummary(),
-        scenariosApi.generate({ max_drivers: 3, include_portfolio_mapping: true })
+        safeGetSummary(),
+        safeGenerateScenarios()
       ])
 
-      const result = await Promise.race([dataPromise, timeoutPromise]) as PromiseSettledResult<any>[]
+      let result: PromiseSettledResult<any>[]
+      try {
+        result = await Promise.race([dataPromise, timeoutPromise])
+      } catch (timeoutError: any) {
+        // Si es timeout, lanzar error específico
+        throw new Error(timeoutError.message || 'Timeout: La generación excedió 90 segundos')
+      }
 
       // Procesar resultados
       const summaryData = result[0]
@@ -71,22 +99,24 @@ export default function ProactiveAssistant({ onUpdate, autoLoad = true }: Proact
         sensitivity: number
         confidence: number
       }> = []
+      let hasPartialData = false
 
       // Procesar resumen de situación
       if (summaryData.status === 'fulfilled' && summaryData.value.has_content) {
-        summary = summaryData.value.summary
+        summary = summaryData.value.summary || ''
         const paragraphs = summary.split('\n').filter(p => p.trim())
         whyItMatters = paragraphs.slice(0, 2).join('\n\n')
-      } else if (summaryData.status === 'rejected') {
-        throw new Error('Error al obtener resumen de situación')
+      } else {
+        console.warn('Resumen de situación no disponible:', summaryData.status === 'rejected' ? summaryData.reason : 'sin contenido')
+        hasPartialData = true
       }
 
       // Procesar escenarios
-      if (scenariosData.status === 'fulfilled') {
+      if (scenariosData.status === 'fulfilled' && scenariosData.value.drivers) {
         scenarios = scenariosData.value.drivers || []
 
         // Extraer top 3 activos más sensibles
-        const allMappings = scenarios.flatMap(s => s.portfolio_mappings)
+        const allMappings = scenarios.flatMap(s => s.portfolio_mappings || [])
         const uniqueAssets = new Map<string, {
           identifier: string
           name?: string
@@ -109,10 +139,45 @@ export default function ProactiveAssistant({ onUpdate, autoLoad = true }: Proact
         topAssets = Array.from(uniqueAssets.values())
           .sort((a, b) => Math.abs(b.sensitivity) - Math.abs(a.sensitivity))
           .slice(0, 3)
-      } else if (scenariosData.status === 'rejected') {
-        // Si fallan escenarios pero tenemos resumen, continuar en modo degradado
+      } else {
+        console.warn('Escenarios no disponibles:', scenariosData.status === 'rejected' ? scenariosData.reason : 'sin drivers')
+        hasPartialData = true
+      }
+
+      // Si ambos fallaron completamente, lanzar error con detalles
+      if (!summary && scenarios.length === 0) {
+        const errorDetails = []
+        if (summaryData.status === 'rejected') {
+          const reason = summaryData.reason
+          const errorMsg = reason?.response?.data?.detail || reason?.message || 'Error desconocido'
+          errorDetails.push(`Resumen: ${errorMsg}`)
+        } else if (summaryData.status === 'fulfilled' && !summaryData.value.has_content) {
+          errorDetails.push('Resumen: Sin contenido disponible')
+        }
+        
+        if (scenariosData.status === 'rejected') {
+          const reason = scenariosData.reason
+          const errorMsg = reason?.response?.data?.detail || reason?.message || 'Error desconocido'
+          errorDetails.push(`Escenarios: ${errorMsg}`)
+        } else if (scenariosData.status === 'fulfilled' && (!scenariosData.value.drivers || scenariosData.value.drivers.length === 0)) {
+          const warnings = scenariosData.value.warnings || []
+          const warningMsg = warnings.length > 0 ? warnings.join('; ') : 'No se identificaron drivers temáticos'
+          errorDetails.push(`Escenarios: ${warningMsg}`)
+        }
+        
+        throw new Error(`No se pudo generar síntesis. ${errorDetails.join('; ')}`)
+      }
+
+      // Si solo uno falló, activar modo degradado
+      if (hasPartialData) {
         setIsDegraded(true)
-        setError('Escenarios no disponibles. Mostrando resumen parcial.')
+        if (!summary && scenarios.length === 0) {
+          setError('Datos parciales disponibles')
+        } else if (!summary) {
+          setError('Resumen no disponible. Mostrando escenarios.')
+        } else if (scenarios.length === 0) {
+          setError('Escenarios no disponibles. Mostrando resumen parcial.')
+        }
       }
 
       // Crear síntesis
@@ -124,14 +189,10 @@ export default function ProactiveAssistant({ onUpdate, autoLoad = true }: Proact
         generatedAt: new Date().toISOString()
       }
 
-      // Solo actualizar si tenemos al menos resumen o escenarios
-      if (summary || scenarios.length > 0) {
-        setSynthesis(newSynthesis)
-        lastValidSynthesisRef.current = newSynthesis
-        onUpdate?.()
-      } else {
-        throw new Error('No se pudo generar síntesis: datos insuficientes')
-      }
+      // Actualizar síntesis si tenemos al menos algo
+      setSynthesis(newSynthesis)
+      lastValidSynthesisRef.current = newSynthesis
+      onUpdate?.()
 
     } catch (err: any) {
       console.error('Error generando síntesis:', err)

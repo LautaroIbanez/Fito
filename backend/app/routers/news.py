@@ -24,6 +24,7 @@ def build_news_item_response(db_item: NewsItem) -> NewsItemResponse:
     """
     Construye un NewsItemResponse desde un objeto NewsItem de la BD.
     Maneja correctamente el parseo de standardized_data que está almacenado como JSON string.
+    Tolerante a valores NULL en score, score_components e is_obsolete.
     """
     # Construir diccionario manualmente para evitar problemas con standardized_data
     item_dict = {
@@ -32,11 +33,23 @@ def build_news_item_response(db_item: NewsItem) -> NewsItemResponse:
         "body": db_item.body,
         "source": db_item.source,
         "created_at": db_item.created_at.isoformat() if isinstance(db_item.created_at, datetime) else str(db_item.created_at),
-        "score": db_item.score,
-        "score_components": db_item.score_components,
-        "is_obsolete": db_item.is_obsolete,
+        "score": getattr(db_item, 'score', None),  # Tolerante a AttributeError
+        "score_components": None,
+        "is_obsolete": getattr(db_item, 'is_obsolete', False) if hasattr(db_item, 'is_obsolete') else False,
         "standardized_data": None
     }
+    
+    # Parsear score_components si existe
+    score_components_raw = getattr(db_item, 'score_components', None)
+    if score_components_raw:
+        try:
+            if isinstance(score_components_raw, str):
+                item_dict["score_components"] = json.loads(score_components_raw)
+            else:
+                item_dict["score_components"] = score_components_raw
+        except (json.JSONDecodeError, TypeError, Exception) as e:
+            logger.warning(f"Error parseando score_components para noticia {db_item.id}: {e}")
+            item_dict["score_components"] = None
     
     # Parsear standardized_data si existe
     if db_item.standardized_data:
@@ -135,17 +148,7 @@ async def create_news(
         
         logger.info(f"Noticia creada: ID {db_item.id}")
         
-        # Parsear standardized_data si existe
-        response = NewsItemResponse.model_validate(db_item)
-        if db_item.standardized_data:
-            try:
-                standardized_dict = json.loads(db_item.standardized_data)
-                response.standardized_data = StandardizedNewsData(**standardized_dict)
-            except (json.JSONDecodeError, Exception) as e:
-                logger.warning(f"Error parseando standardized_data para noticia {db_item.id}: {e}")
-                response.standardized_data = None
-        
-        return response
+        return build_news_item_response(db_item)
         
     except ValueError as e:
         logger.warning(f"Error de validación al crear noticia: {e}")

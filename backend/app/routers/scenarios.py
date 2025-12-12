@@ -47,8 +47,18 @@ async def generate_scenarios(
                 NewsItem.id.in_(scenario_request.news_ids)
             ).all()
         else:
-            # Obtener todas las noticias recientes
-            news_items = db.query(NewsItem).order_by(desc(NewsItem.created_at)).limit(50).all()
+            # Obtener noticias recientes (limitar a 20 para evitar timeouts)
+            # Priorizar noticias ya estandarizadas
+            news_items = db.query(NewsItem).filter(
+                NewsItem.standardized_data.isnot(None)
+            ).order_by(desc(NewsItem.created_at)).limit(20).all()
+            
+            # Si no hay suficientes estandarizadas, agregar algunas sin estandarizar
+            if len(news_items) < 10:
+                additional_items = db.query(NewsItem).filter(
+                    NewsItem.standardized_data.is_(None)
+                ).order_by(desc(NewsItem.created_at)).limit(10 - len(news_items)).all()
+                news_items.extend(additional_items)
         
         if not news_items:
             raise HTTPException(
@@ -79,10 +89,18 @@ async def generate_scenarios(
                 # No está estandarizada, agregar a la lista para estandarizar
                 needs_standardization.append(item)
         
-        # Estandarizar noticias que lo necesiten
+        # Estandarizar noticias que lo necesiten (limitar a 5 para evitar timeouts)
         if needs_standardization:
-            logger.info(f"Estandarizando {len(needs_standardization)} noticias automáticamente...")
-            for item in needs_standardization:
+            # Limitar cuántas noticias estandarizamos en una sola llamada para evitar timeouts
+            items_to_standardize = needs_standardization[:5]
+            if len(needs_standardization) > 5:
+                logger.warning(
+                    f"Limitando estandarización a {len(items_to_standardize)} de {len(needs_standardization)} noticias "
+                    "para evitar timeout. Las restantes se procesarán en llamadas posteriores."
+                )
+            
+            logger.info(f"Estandarizando {len(items_to_standardize)} noticias automáticamente...")
+            for item in items_to_standardize:
                 try:
                     if not item.body:
                         logger.warning(f"Noticia {item.id} no tiene cuerpo, omitiendo")

@@ -30,6 +30,55 @@ def add_standardized_data_column():
         raise
 
 
+def add_score_columns():
+    """Agrega las columnas de score (score, score_components, is_obsolete) a la tabla news_items si no existen."""
+    try:
+        with engine.connect() as conn:
+            # Verificar qué columnas ya existen
+            result = conn.execute(text("PRAGMA table_info(news_items)"))
+            columns = [row[1] for row in result.fetchall()]  # row[1] es el nombre de la columna
+            
+            # Agregar score si no existe
+            if 'score' not in columns:
+                logger.info("Agregando columna score a news_items...")
+                conn.execute(text("""
+                    ALTER TABLE news_items 
+                    ADD COLUMN score REAL
+                """))
+                conn.commit()
+                logger.info("Columna score agregada exitosamente")
+            else:
+                logger.debug("Columna score ya existe, omitiendo migración")
+            
+            # Agregar score_components si no existe
+            if 'score_components' not in columns:
+                logger.info("Agregando columna score_components a news_items...")
+                conn.execute(text("""
+                    ALTER TABLE news_items 
+                    ADD COLUMN score_components TEXT
+                """))
+                conn.commit()
+                logger.info("Columna score_components agregada exitosamente")
+            else:
+                logger.debug("Columna score_components ya existe, omitiendo migración")
+            
+            # Agregar is_obsolete si no existe
+            if 'is_obsolete' not in columns:
+                logger.info("Agregando columna is_obsolete a news_items...")
+                conn.execute(text("""
+                    ALTER TABLE news_items 
+                    ADD COLUMN is_obsolete INTEGER DEFAULT 0
+                """))
+                conn.commit()
+                logger.info("Columna is_obsolete agregada exitosamente")
+            else:
+                logger.debug("Columna is_obsolete ya existe, omitiendo migración")
+                
+    except Exception as e:
+        logger.error(f"Error al ejecutar migración de columnas de score: {e}", exc_info=True)
+        raise
+
+
 def add_sectors_and_catalog_tables():
     """Crea las tablas de sectores y catálogo de activos si no existen."""
     try:
@@ -79,6 +128,7 @@ def run_migrations():
     """Ejecuta todas las migraciones pendientes."""
     logger.info("Ejecutando migraciones de base de datos...")
     add_standardized_data_column()
+    add_score_columns()
     add_sectors_and_catalog_tables()
     
     # Intentar inicializar catálogo (puede fallar si las tablas no existen aún)

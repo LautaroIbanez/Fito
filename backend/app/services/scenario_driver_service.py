@@ -174,9 +174,16 @@ Responde en formato JSON con esta estructura:
             logger.debug(f"Contenido recibido: {drivers_dict}")
             return drivers
         
-        # Crear mapa de IDs válidos
-        valid_news_ids = {news.get("id", idx + 1) for idx, news in enumerate(standardized_news_items)}
-        logger.debug(f"IDs de noticias válidos: {valid_news_ids}")
+        # Crear mapa de IDs válidos (usar tanto el ID real como el índice+1 para mayor tolerancia)
+        valid_news_ids = set()
+        for idx, news in enumerate(standardized_news_items):
+            news_id = news.get("id")
+            if news_id:
+                valid_news_ids.add(news_id)
+            # También agregar índice+1 como fallback
+            valid_news_ids.add(idx + 1)
+        
+        logger.info(f"IDs de noticias válidos (incluyendo índices): {valid_news_ids}")
         
         for idx, driver_data in enumerate(drivers_dict["drivers"]):
             if not isinstance(driver_data, dict):
@@ -187,7 +194,7 @@ Responde en formato JSON con esta estructura:
             driver_description = driver_data.get("description", "").strip()
             related_ids = driver_data.get("related_news_ids", [])
             
-            logger.debug(f"Procesando driver '{driver_name}': IDs relacionados={related_ids}")
+            logger.info(f"Procesando driver '{driver_name}': IDs relacionados={related_ids}")
             
             if not driver_name:
                 logger.warning(f"Driver en índice {idx} sin nombre, omitiendo")
@@ -196,10 +203,27 @@ Responde en formato JSON con esta estructura:
             # Filtrar IDs inválidos
             valid_ids = [news_id for news_id in related_ids if news_id in valid_news_ids]
             
+            # Si no hay IDs válidos pero hay IDs relacionados, intentar mapear por posición
+            if not valid_ids and related_ids:
+                logger.warning(
+                    f"Driver '{driver_name}': IDs recibidos {related_ids} no coinciden con IDs válidos {valid_news_ids}. "
+                    "Intentando mapear por posición..."
+                )
+                # Intentar mapear por posición (si OpenAI usó índices 1-based)
+                for news_id in related_ids:
+                    if isinstance(news_id, int) and 1 <= news_id <= len(standardized_news_items):
+                        # Mapear índice a ID real
+                        mapped_news = standardized_news_items[news_id - 1]
+                        real_id = mapped_news.get("id")
+                        if real_id:
+                            valid_ids.append(real_id)
+                            logger.info(f"Mapeado índice {news_id} a ID real {real_id}")
+            
             if not valid_ids:
                 logger.warning(
-                    f"Driver '{driver_name}' no tiene noticias válidas asociadas. "
-                    f"IDs recibidos: {related_ids}, IDs válidos: {valid_news_ids}"
+                    f"Driver '{driver_name}' no tiene noticias válidas asociadas después de mapeo. "
+                    f"IDs recibidos: {related_ids}, IDs válidos: {valid_news_ids}. "
+                    "Omitiendo driver."
                 )
                 continue
             
@@ -208,5 +232,6 @@ Responde en formato JSON con esta estructura:
                 "description": driver_description,
                 "related_news_ids": valid_ids
             })
+            logger.info(f"Driver '{driver_name}' aceptado con {len(valid_ids)} noticias válidas")
         
         return drivers

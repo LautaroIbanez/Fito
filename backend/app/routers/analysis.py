@@ -16,6 +16,7 @@ from app.services.openai_service import OpenAIService
 from app.services.news_scoring_service import NewsScoringService
 from app.services.portfolio_analysis_service import PortfolioAnalysisService
 from app.models import NewsItemResponse, PortfolioItemResponse
+from app.routers.news import build_news_item_response
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/analysis", tags=["analysis"])
@@ -44,8 +45,8 @@ async def generate_analysis(
                 detail="Se requiere al menos una noticia para generar el análisis"
             )
         
-        # Convertir a modelos de respuesta
-        news_responses = [NewsItemResponse.model_validate(item) for item in news_items]
+        # Convertir a modelos de respuesta usando build_news_item_response para manejar standardized_data correctamente
+        news_responses = [build_news_item_response(item) for item in news_items]
         
         # Obtener items de cartera
         portfolio_items = db.query(PortfolioItem).order_by(desc(PortfolioItem.updated_at)).all()
@@ -223,8 +224,8 @@ async def generate_news_summaries(
                 "news_count": 0
             }
         
-        # Convertir a modelos de respuesta
-        news_responses = [NewsItemResponse.model_validate(item) for item in news_items]
+        # Convertir a modelos de respuesta usando build_news_item_response para manejar standardized_data correctamente
+        news_responses = [build_news_item_response(item) for item in news_items]
         
         # Obtener los últimos items de cartera (ordenados por fecha de actualización, más recientes primero)
         portfolio_items = db.query(PortfolioItem).order_by(desc(PortfolioItem.updated_at)).limit(50).all()

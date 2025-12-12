@@ -20,6 +20,10 @@ class NewsItem(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     # Standardized data stored as JSON string (SQLite doesn't have native JSON)
     standardized_data = Column(Text, nullable=True)
+    # Scoring fields
+    score = Column(Float, nullable=True)  # Score de relevancia calculado
+    score_components = Column(Text, nullable=True)  # JSON con componentes del score
+    is_obsolete = Column(Boolean, default=False, nullable=False)  # Si la noticia está obsoleta
 
     def to_dict(self):
         """Convierte el modelo a diccionario."""
@@ -30,6 +34,13 @@ class NewsItem(Base):
             except (json.JSONDecodeError, TypeError):
                 standardized = None
         
+        score_components_dict = None
+        if self.score_components:
+            try:
+                score_components_dict = json.loads(self.score_components)
+            except (json.JSONDecodeError, TypeError):
+                score_components_dict = None
+        
         return {
             "id": self.id,
             "title": self.title,
@@ -37,6 +48,9 @@ class NewsItem(Base):
             "source": self.source,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "standardized_data": standardized,
+            "score": self.score,
+            "score_components": score_components_dict,
+            "is_obsolete": self.is_obsolete if self.is_obsolete is not None else False,
         }
 
 
