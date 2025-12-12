@@ -25,12 +25,48 @@ interface HoyViewProps {
   onManagePortfolio?: () => void
 }
 
+// Función para sintetizar resumen en formato de hints/bullets
+function synthesizeSummaryHints(summary: string): string[] {
+  if (!summary || !summary.trim()) {
+    return []
+  }
+  
+  // Dividir por párrafos y oraciones
+  const paragraphs = summary.split('\n').filter(p => p.trim())
+  const hints: string[] = []
+  
+  for (const paragraph of paragraphs.slice(0, 5)) { // Limitar a primeros 5 párrafos
+    // Dividir párrafo en oraciones
+    const sentences = paragraph.split(/[.!?]+/).filter(s => s.trim().length > 20)
+    
+    for (const sentence of sentences.slice(0, 2)) { // Máximo 2 oraciones por párrafo
+      const trimmed = sentence.trim()
+      if (trimmed.length > 0 && trimmed.length < 150) { // Filtrar oraciones muy largas
+        hints.push(trimmed)
+        if (hints.length >= 3) break // Máximo 3 hints
+      }
+    }
+    
+    if (hints.length >= 3) break
+  }
+  
+  // Si no hay suficientes hints, crear algunos desde el resumen completo
+  if (hints.length === 0 && summary.length > 50) {
+    // Dividir el resumen en chunks y tomar los primeros 3
+    const chunks = summary.split(/[.!?]+/).filter(s => s.trim().length > 30 && s.trim().length < 120)
+    return chunks.slice(0, 3).map(c => c.trim())
+  }
+  
+  return hints
+}
+
 export default function HoyView({ onAddNews, onManagePortfolio }: HoyViewProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   
   // Datos principales
   const [situationSummary, setSituationSummary] = useState<string | null>(null)
+  const [summaryHints, setSummaryHints] = useState<string[]>([])
   const [whyItMatters, setWhyItMatters] = useState<string | null>(null)
   const [topSensitiveAssets, setTopSensitiveAssets] = useState<Array<{
     identifier: string
@@ -50,18 +86,32 @@ export default function HoyView({ onAddNews, onManagePortfolio }: HoyViewProps) 
       setError(null)
       
       // Cargar datos en paralelo para respuesta rápida
+      // Usar timeout más corto para escenarios (60s) ya que el asistente maneja el timeout largo
       const [summaryData, portfolioData, scenariosData] = await Promise.allSettled([
         newsApi.getSituationSummary(),
         portfolioApi.list(),
-        scenariosApi.generate({ max_drivers: 3, include_portfolio_mapping: true })
+        Promise.race([
+          scenariosApi.generate({ max_drivers: 2, include_portfolio_mapping: true }),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout escenarios')), 60000)
+          )
+        ]).catch(() => ({ drivers: [], total_drivers: 0, total_news_analyzed: 0, generated_at: new Date().toISOString(), partial_results: false, missing_fields: [], warnings: ['Timeout al generar escenarios'] }))
       ])
       
       // Procesar resumen de situación
       if (summaryData.status === 'fulfilled' && summaryData.value.has_content) {
-        setSituationSummary(summaryData.value.summary)
+        const summary = summaryData.value.summary
+        setSituationSummary(summary)
+        // Sintetizar en hints/bullets
+        const hints = synthesizeSummaryHints(summary)
+        setSummaryHints(hints)
         // Extraer "por qué importa" del resumen (primeros párrafos)
-        const paragraphs = summaryData.value.summary.split('\n').filter(p => p.trim())
+        const paragraphs = summary.split('\n').filter(p => p.trim())
         setWhyItMatters(paragraphs.slice(0, 2).join('\n\n'))
+      } else if (summaryData.status === 'fulfilled' && !summaryData.value.has_content) {
+        // Si no hay contenido pero la respuesta fue exitosa, mantener estado vacío
+        setSituationSummary(null)
+        setSummaryHints([])
       }
       
       // Procesar escenarios y extraer top activos sensibles
@@ -123,17 +173,55 @@ export default function HoyView({ onAddNews, onManagePortfolio }: HoyViewProps) 
     )
   }
 
+  // Callback para recibir datos del asistente proactivo
+  const handleAssistantUpdate = (assistantData?: { summary?: string; synthesis?: any }) => {
+    // Si el asistente tiene datos, usarlos (incluso en modo degradado)
+    if (assistantData?.summary) {
+      const hints = synthesizeSummaryHints(assistantData.summary)
+      setSummaryHints(hints)
+      setSituationSummary(assistantData.summary)
+      
+      // Si también tiene "whyItMatters", usarlo
+      if (assistantData.synthesis?.whyItMatters) {
+        setWhyItMatters(assistantData.synthesis.whyItMatters)
+      }
+      
+      // Si tiene top assets, usarlos también
+      if (assistantData.synthesis?.topAssets && assistantData.synthesis.topAssets.length > 0) {
+        setTopSensitiveAssets(assistantData.synthesis.topAssets)
+      }
+      
+      // Si tiene escenarios, usarlos también
+      if (assistantData.synthesis?.scenarios && assistantData.synthesis.scenarios.length > 0) {
+        setScenarios(assistantData.synthesis.scenarios)
+      }
+    }
+    // También recargar datos propios en paralelo (pero no bloquear si ya tenemos datos del asistente)
+    if (!assistantData?.summary) {
+      loadHoyData()
+    }
+  }
+
   return (
     <div className="hoy-view">
       {/* Asistente IA Proactivo - se carga automáticamente */}
-      <ProactiveAssistant autoLoad={true} onUpdate={() => loadHoyData()} />
+      <ProactiveAssistant autoLoad={true} onUpdate={handleAssistantUpdate} />
 
       {/* Bloques secundarios en grid */}
       <div className="hoy-blocks-grid">
         {/* Qué pasó hoy */}
         <section className="hoy-block que-paso-hoy">
           <h2>📰 Qué pasó hoy</h2>
-          {situationSummary ? (
+          {summaryHints.length > 0 ? (
+            <div className="summary-hints">
+              <ul className="hints-list">
+                {summaryHints.map((hint, idx) => (
+                  <li key={idx} className="hint-item">{hint}</li>
+                ))}
+              </ul>
+            </div>
+          ) : situationSummary ? (
+            // Fallback: si no hay hints sintetizados, mostrar primeros párrafos
             <div className="summary-text">
               {situationSummary.split('\n').slice(0, 3).map((p, idx) => (
                 p.trim() && <p key={idx}>{p}</p>

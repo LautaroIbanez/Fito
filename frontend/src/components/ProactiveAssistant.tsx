@@ -3,7 +3,7 @@ import { newsApi, scenariosApi, ScenarioData } from '../services/api'
 import './ProactiveAssistant.css'
 
 interface ProactiveAssistantProps {
-  onUpdate?: () => void
+  onUpdate?: (data?: { summary?: string; synthesis?: SynthesisData }) => void
   autoLoad?: boolean
 }
 
@@ -86,7 +86,7 @@ export default function ProactiveAssistant({ onUpdate, autoLoad = true }: Proact
         throw new Error(timeoutError.message || 'Timeout: La generación excedió 90 segundos')
       }
 
-      // Procesar resultados
+      // Procesar resultados (ya son PromiseSettledResult)
       const summaryData = result[0]
       const scenariosData = result[1]
 
@@ -168,7 +168,7 @@ export default function ProactiveAssistant({ onUpdate, autoLoad = true }: Proact
         throw new Error(`No se pudo generar síntesis. ${errorDetails.join('; ')}`)
       }
 
-      // Si solo uno falló, activar modo degradado
+      // Si solo uno falló, activar modo degradado pero continuar
       if (hasPartialData) {
         setIsDegraded(true)
         if (!summary && scenarios.length === 0) {
@@ -180,7 +180,7 @@ export default function ProactiveAssistant({ onUpdate, autoLoad = true }: Proact
         }
       }
 
-      // Crear síntesis
+      // Crear síntesis (incluso si es parcial)
       const newSynthesis: SynthesisData = {
         summary,
         whyItMatters,
@@ -189,10 +189,17 @@ export default function ProactiveAssistant({ onUpdate, autoLoad = true }: Proact
         generatedAt: new Date().toISOString()
       }
 
-      // Actualizar síntesis si tenemos al menos algo
-      setSynthesis(newSynthesis)
-      lastValidSynthesisRef.current = newSynthesis
-      onUpdate?.()
+      // Actualizar síntesis si tenemos al menos algo (resumen o escenarios)
+      // Esto permite mostrar resultados parciales en lugar de fallar completamente
+      if (summary || scenarios.length > 0) {
+        setSynthesis(newSynthesis)
+        lastValidSynthesisRef.current = newSynthesis
+        // Pasar datos al callback para que otros componentes puedan usarlos
+        onUpdate?.({ summary, synthesis: newSynthesis })
+      } else {
+        // Solo lanzar error si realmente no hay nada
+        throw new Error('No se pudo generar síntesis: datos insuficientes')
+      }
 
     } catch (err: any) {
       console.error('Error generando síntesis:', err)
@@ -200,13 +207,16 @@ export default function ProactiveAssistant({ onUpdate, autoLoad = true }: Proact
       setError(errorMsg)
       setIsDegraded(true)
 
-      // Si hay último resultado válido, mantenerlo
+      // Si hay último resultado válido, mantenerlo y notificar
       if (lastValidSynthesisRef.current) {
-        setSynthesis({
+        const degradedSynthesis = {
           ...lastValidSynthesisRef.current,
           hasError: true,
           errorMessage: errorMsg
-        })
+        }
+        setSynthesis(degradedSynthesis)
+        // Pasar datos degradados al callback para que otros componentes puedan usarlos
+        onUpdate?.({ summary: degradedSynthesis.summary, synthesis: degradedSynthesis })
       }
     } finally {
       setIsLoading(false)

@@ -45,6 +45,32 @@
   color: #333333;
 }
 
+/* Hints sintetizados para "Qué pasó hoy" */
+.summary-hints {
+  margin-top: var(--spacing-2);
+}
+
+.hints-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.hint-item {
+  padding: var(--spacing-2) var(--spacing-3);
+  margin-bottom: var(--spacing-2);
+  background: var(--color-gray-50);
+  border-left: 3px solid var(--color-green-600);
+  border-radius: var(--radius-sm);
+  color: #333333;
+  line-height: 1.5;
+  font-size: var(--font-size-sm);
+}
+
+.hint-item:last-child {
+  margin-bottom: 0;
+}
+
 /* Top activos */
 .assets-list {
   display: flex;
