@@ -229,6 +229,11 @@ export const portfolioApi = {
     return response.data
   },
 
+  getRankings: async (): Promise<PortfolioRankings> => {
+    const response = await axios.get<PortfolioRankings>(`${API_BASE_URL}/portfolio/rankings`)
+    return response.data
+  },
+
 }
 
 
@@ -292,6 +297,41 @@ export interface SituationSummary {
   generated_at: string
   has_content: boolean
   tokens_used?: number
+}
+
+export interface PortfolioRanking {
+  item_id: number
+  symbol?: string
+  name: string
+  composite_score: number
+  sentiment_score: number
+  technical_score: number
+  color: 'green' | 'amber' | 'red'
+  status_text: string
+  details: {
+    sentiment: {
+      score: number
+      explanation: string
+      company_news_count: number
+      sector_news_count: number
+      headlines: string[]
+    }
+    technical: {
+      score: number
+      explanation: string
+      signals: Record<string, {
+        value: number
+        score: number
+        description: string
+      }>
+    }
+  }
+}
+
+export interface PortfolioRankings {
+  rankings: PortfolioRanking[]
+  total: number
+  generated_at: string
 }
 
 

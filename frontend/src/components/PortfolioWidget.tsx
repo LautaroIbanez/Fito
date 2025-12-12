@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { portfolioApi, PortfolioItem, PortfolioItemCreate } from '../services/api'
+import { portfolioApi, PortfolioItem, PortfolioItemCreate, PortfolioRanking, PortfolioRankings } from '../services/api'
 import PriceChart from './PriceChart'
 import './WidgetShared.css'
 import './PortfolioWidget.css'
@@ -21,6 +21,9 @@ export default function PortfolioWidget({ onUpdate, refreshTrigger }: PortfolioW
   const [expandedChartId, setExpandedChartId] = useState<number | null>(null)
   const [priceData, setPriceData] = useState<Record<number, Array<{ date: string; price: number }>>>({})
   const [loadingCharts, setLoadingCharts] = useState<Record<number, boolean>>({})
+  const [rankings, setRankings] = useState<Record<number, PortfolioRanking>>({})
+  const [loadingRankings, setLoadingRankings] = useState(false)
+  const [selectedRankingDetails, setSelectedRankingDetails] = useState<PortfolioRanking | null>(null)
   const [formData, setFormData] = useState({
     asset_type: 'acciones',
     name: '',
@@ -33,6 +36,7 @@ export default function PortfolioWidget({ onUpdate, refreshTrigger }: PortfolioW
 
   useEffect(() => {
     loadData(true) // Skip onUpdate to prevent infinite loop
+    loadRankings()
   }, [refreshTrigger])
 
   const loadData = async (skipUpdate = false) => {
@@ -48,6 +52,23 @@ export default function PortfolioWidget({ onUpdate, refreshTrigger }: PortfolioW
       setError(err.response?.data?.detail || 'Error al cargar la cartera')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const loadRankings = async () => {
+    try {
+      setLoadingRankings(true)
+      const rankingsData = await portfolioApi.getRankings()
+      const rankingsMap: Record<number, PortfolioRanking> = {}
+      rankingsData.rankings.forEach(ranking => {
+        rankingsMap[ranking.item_id] = ranking
+      })
+      setRankings(rankingsMap)
+    } catch (err: any) {
+      console.error('Error al cargar rankings:', err)
+      // No mostrar error al usuario, solo log
+    } finally {
+      setLoadingRankings(false)
     }
   }
 
@@ -358,10 +379,26 @@ export default function PortfolioWidget({ onUpdate, refreshTrigger }: PortfolioW
           <h3>📋 Activos en Cartera</h3>
           {items.length > 0 ? (
             <div className="portfolio-items-list">
-              {items.map((item) => (
+              {items.map((item) => {
+                const ranking = rankings[item.id]
+                return (
                 <div key={item.id} className="portfolio-item-container">
                   <div className="portfolio-item-row">
                     <div className="item-info">
+                      {ranking && (
+                        <button
+                          className={`ranking-indicator ranking-${ranking.color}`}
+                          onClick={() => setSelectedRankingDetails(ranking)}
+                          title={`Ranking: ${ranking.status_text} (Score: ${ranking.composite_score.toFixed(1)})`}
+                          aria-label={`Ver detalles de ranking para ${item.name}: ${ranking.status_text}`}
+                        >
+                          <span className="ranking-dot" aria-hidden="true"></span>
+                          <span className="ranking-status-text">{ranking.status_text}</span>
+                        </button>
+                      )}
+                      {loadingRankings && !ranking && (
+                        <span className="ranking-loading" aria-label="Cargando ranking...">⏳</span>
+                      )}
                       <span className={`asset-type-badge ${item.asset_type}`}>
                         {item.asset_type}
                       </span>
@@ -416,11 +453,81 @@ export default function PortfolioWidget({ onUpdate, refreshTrigger }: PortfolioW
                     </div>
                   )}
                 </div>
-              ))}
+              )})}
             </div>
           ) : (
             <div className="empty-section">No hay activos</div>
           )}
+        </div>
+      )}
+
+      {/* Modal de detalles de ranking */}
+      {selectedRankingDetails && (
+        <div className="ranking-modal-overlay" onClick={() => setSelectedRankingDetails(null)}>
+          <div className="ranking-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="ranking-modal-header">
+              <h3>📊 Detalles de Ranking: {selectedRankingDetails.name}</h3>
+              <button
+                className="ranking-modal-close"
+                onClick={() => setSelectedRankingDetails(null)}
+                aria-label="Cerrar modal"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="ranking-modal-body">
+              <div className="ranking-summary">
+                <div className={`ranking-badge-large ranking-${selectedRankingDetails.color}`}>
+                  <span className="ranking-dot-large"></span>
+                  <div>
+                    <div className="ranking-status-large">{selectedRankingDetails.status_text}</div>
+                    <div className="ranking-score">Score: {selectedRankingDetails.composite_score.toFixed(1)}/100</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="ranking-details-grid">
+                <div className="ranking-detail-section">
+                  <h4>📰 Sentimiento ({selectedRankingDetails.sentiment_score.toFixed(1)}/100)</h4>
+                  <p className="ranking-explanation">{selectedRankingDetails.details.sentiment.explanation}</p>
+                  <div className="ranking-metrics">
+                    <div>Noticias de empresa: {selectedRankingDetails.details.sentiment.company_news_count}</div>
+                    <div>Noticias de sector: {selectedRankingDetails.details.sentiment.sector_news_count}</div>
+                  </div>
+                  {selectedRankingDetails.details.sentiment.headlines.length > 0 && (
+                    <div className="ranking-headlines">
+                      <strong>Headlines relevantes:</strong>
+                      <ul>
+                        {selectedRankingDetails.details.sentiment.headlines.map((headline, idx) => (
+                          <li key={idx}>{headline}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+
+                <div className="ranking-detail-section">
+                  <h4>📈 Análisis Técnico ({selectedRankingDetails.technical_score.toFixed(1)}/100)</h4>
+                  <p className="ranking-explanation">{selectedRankingDetails.details.technical.explanation}</p>
+                  {Object.keys(selectedRankingDetails.details.technical.signals).length > 0 && (
+                    <div className="ranking-signals">
+                      {Object.entries(selectedRankingDetails.details.technical.signals).map(([key, signal]) => (
+                        <div key={key} className="ranking-signal-item">
+                          <strong>{key.toUpperCase()}:</strong> {signal.description}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="ranking-weights-info">
+                <small>
+                  Pesos: Sentimiento {((1 - 0.4) * 100).toFixed(0)}% | Técnico {(0.4 * 100).toFixed(0)}%
+                </small>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -22,6 +22,7 @@ from app.services.trading_recommendations_service import TradingRecommendationsS
 from app.services.recommendation_audit_service import RecommendationAuditService
 from app.services.risk_service import RiskService
 from app.services.portfolio_insights_service import PortfolioInsightsService
+from app.services.portfolio_ranking_service import PortfolioRankingService
 from sqlalchemy import and_, or_, desc, asc
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,7 @@ router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 # Inicializar servicios
 recommendations_service = TradingRecommendationsService()
 audit_service = RecommendationAuditService()
+ranking_service = PortfolioRankingService()
 
 
 @router.post("", response_model=PortfolioItemResponse, status_code=status.HTTP_201_CREATED)
@@ -598,6 +600,38 @@ async def get_recommendation_statistics(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error interno al obtener estadísticas: {str(e)}"
+        )
+
+
+@router.get("/rankings")
+async def get_portfolio_rankings(
+    db: Session = Depends(get_db)
+):
+    """
+    Obtiene rankings de todos los holdings de la cartera con traffic-light colors.
+    
+    Combina análisis técnico (RSI, MA, volumen) con sentimiento de noticias
+    (empresa + sector) para generar un score compuesto y mapearlo a verde/ámbar/rojo.
+    
+    Returns:
+        Dict con rankings ordenados por composite_score descendente
+    """
+    try:
+        rankings = ranking_service.get_portfolio_rankings(db)
+        
+        logger.info(f"Rankings generados para {len(rankings)} holdings")
+        
+        return {
+            "rankings": rankings,
+            "total": len(rankings),
+            "generated_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error al generar rankings de cartera: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error interno al generar rankings: {str(e)}"
         )
 
 

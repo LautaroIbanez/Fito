@@ -83,8 +83,8 @@ export default function NewsWidget({ onUpdate, refreshTrigger, maxItems = 10, so
     }).format(date)
   }
 
-  const getScoreColor = (score: number | undefined) => {
-    if (!score) return '#888'
+  const getScoreColor = (score: number | undefined | null) => {
+    if (score === undefined || score === null || typeof score !== 'number') return '#888'
     if (score >= 5) return '#4caf50'
     if (score >= 2) return '#ff9800'
     return '#f44336'
@@ -483,7 +483,7 @@ export default function NewsWidget({ onUpdate, refreshTrigger, maxItems = 10, so
                   <span className="tile-time" title={formatFullDate(item.created_at)}>
                     {formatTime(item.created_at)}
                   </span>
-                  {item.score !== undefined && (
+                  {item.score !== undefined && item.score !== null && typeof item.score === 'number' && (
                     <span
                       className="tile-score"
                       style={{ color: getScoreColor(item.score) }}

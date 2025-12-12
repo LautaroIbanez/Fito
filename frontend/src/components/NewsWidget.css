@@ -54,14 +54,14 @@
 .refresh-btn:hover:not(:disabled),
 .action-btn:hover:not(:disabled) {
   background: #e9ecef;
-  border-color: #667eea;
+  border-color: var(--color-green-600);
   transform: translateY(-1px);
   box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
 }
 
 .refresh-btn:focus-visible,
 .action-btn:focus-visible {
-  outline: 2px solid #667eea;
+  outline: 2px solid var(--color-green-600);
   outline-offset: 2px;
 }
 
@@ -90,7 +90,7 @@
 }
 
 .news-tile:hover {
-  border-color: #667eea;
+  border-color: var(--color-green-600);
   box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
 }
 
@@ -101,7 +101,7 @@
 }
 
 .news-tile.expanded {
-  border-color: #667eea;
+  border-color: var(--color-green-600);
   background: white;
 }
 
@@ -281,7 +281,7 @@
 .expand-button {
   background: none;
   border: none;
-  color: #667eea;
+  color: var(--color-green-600);
   cursor: pointer;
   font-size: 0.85rem;
   font-weight: 500;
@@ -378,7 +378,7 @@
 .form-group input:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: var(--color-green-600);
 }
 
 .form-group input.error,
@@ -419,7 +419,7 @@
 }
 
 .save-button {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--color-green-600);
   color: white;
 }
 
@@ -448,7 +448,7 @@
 
 .retry-button {
   width: 100%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--color-green-600);
   color: white;
   border: none;
   padding: 12px 20px;
@@ -465,7 +465,7 @@
 }
 
 .retry-button:focus-visible {
-  outline: 2px solid #667eea;
+  outline: 2px solid var(--color-green-600);
   outline-offset: 2px;
 }
 

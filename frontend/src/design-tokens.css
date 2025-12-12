@@ -1,0 +1,140 @@
+/**
+ * Faro Design Tokens
+ * Confidence-forward brand with trustworthy, minimalist aesthetic
+ */
+
+:root {
+  /* Brand Colors - Deep Navy & Trust Palette */
+  --color-navy-900: #0a1929;
+  --color-navy-800: #132f4c;
+  --color-navy-700: #1e4976;
+  --color-navy-600: #2e5984;
+  --color-navy-500: #3d6a97;
+  
+  /* Neutral Grays - Soft & Calm */
+  --color-gray-50: #f8f9fa;
+  --color-gray-100: #f1f3f5;
+  --color-gray-200: #e9ecef;
+  --color-gray-300: #dee2e6;
+  --color-gray-400: #ced4da;
+  --color-gray-500: #adb5bd;
+  --color-gray-600: #868e96;
+  --color-gray-700: #495057;
+  --color-gray-800: #343a40;
+  --color-gray-900: #212529;
+  
+  /* Accent Green - Limited, Trustworthy */
+  --color-green-50: #f0f9f4;
+  --color-green-100: #dcf2e3;
+  --color-green-500: #2d8659;
+  --color-green-600: #1f6b47;
+  --color-green-700: #175a3a;
+  
+  /* Semantic Colors */
+  --color-success: var(--color-green-600);
+  --color-success-light: var(--color-green-100);
+  --color-warning: #f59e0b;
+  --color-warning-light: #fef3c7;
+  --color-error: #dc2626;
+  --color-error-light: #fee2e2;
+  --color-info: var(--color-navy-600);
+  --color-info-light: #e0e7ff;
+  
+  /* Background Colors */
+  --bg-primary: #ffffff;
+  --bg-secondary: var(--color-gray-50);
+  --bg-tertiary: var(--color-gray-100);
+  --bg-overlay: rgba(10, 25, 41, 0.5);
+  --bg-gradient: linear-gradient(135deg, var(--color-navy-800) 0%, var(--color-navy-900) 100%);
+  
+  /* Text Colors */
+  --text-primary: var(--color-navy-900);
+  --text-secondary: var(--color-gray-700);
+  --text-tertiary: var(--color-gray-600);
+  --text-inverse: #ffffff;
+  --text-muted: var(--color-gray-500);
+  
+  /* Border Colors */
+  --border-light: var(--color-gray-200);
+  --border-medium: var(--color-gray-300);
+  --border-dark: var(--color-gray-400);
+  
+  /* Typography */
+  --font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  --font-family-mono: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Courier New', monospace;
+  
+  --font-size-xs: 0.75rem;    /* 12px */
+  --font-size-sm: 0.875rem;   /* 14px */
+  --font-size-base: 1rem;      /* 16px */
+  --font-size-lg: 1.125rem;   /* 18px */
+  --font-size-xl: 1.25rem;    /* 20px */
+  --font-size-2xl: 1.5rem;    /* 24px */
+  --font-size-3xl: 1.875rem;  /* 30px */
+  --font-size-4xl: 2.25rem;   /* 36px */
+  
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+  
+  /* Spacing Scale */
+  --spacing-0: 0;
+  --spacing-1: 0.25rem;   /* 4px */
+  --spacing-2: 0.5rem;    /* 8px */
+  --spacing-3: 0.75rem;   /* 12px */
+  --spacing-4: 1rem;      /* 16px */
+  --spacing-5: 1.25rem;   /* 20px */
+  --spacing-6: 1.5rem;    /* 24px */
+  --spacing-8: 2rem;      /* 32px */
+  --spacing-10: 2.5rem;   /* 40px */
+  --spacing-12: 3rem;     /* 48px */
+  --spacing-16: 4rem;     /* 64px */
+  --spacing-20: 5rem;     /* 80px */
+  
+  /* Border Radius */
+  --radius-sm: 0.375rem;   /* 6px */
+  --radius-md: 0.5rem;     /* 8px */
+  --radius-lg: 0.75rem;    /* 12px */
+  --radius-xl: 1rem;       /* 16px */
+  --radius-full: 9999px;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(10, 25, 41, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(10, 25, 41, 0.1), 0 2px 4px -1px rgba(10, 25, 41, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(10, 25, 41, 0.1), 0 4px 6px -2px rgba(10, 25, 41, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(10, 25, 41, 0.1), 0 10px 10px -5px rgba(10, 25, 41, 0.04);
+  
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-base: 200ms ease;
+  --transition-slow: 300ms ease;
+  
+  /* Z-Index Scale */
+  --z-base: 0;
+  --z-dropdown: 1000;
+  --z-sticky: 1020;
+  --z-fixed: 1030;
+  --z-modal-backdrop: 1040;
+  --z-modal: 1050;
+  --z-popover: 1060;
+  --z-tooltip: 1070;
+}
+
+/* Dark mode support (optional, for future) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-primary: var(--color-navy-900);
+    --bg-secondary: var(--color-navy-800);
+    --bg-tertiary: var(--color-navy-700);
+    --text-primary: #ffffff;
+    --text-secondary: var(--color-gray-300);
+    --text-tertiary: var(--color-gray-400);
+    --border-light: var(--color-navy-700);
+    --border-medium: var(--color-navy-600);
+  }
+}
