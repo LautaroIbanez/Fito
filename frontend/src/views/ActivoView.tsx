@@ -83,6 +83,22 @@ export default function ActivoView() {
     setEditingItem(null)
   }
 
+  const handleCreateSubmit = async (formData: PortfolioItemCreate) => {
+    try {
+      setIsSubmitting(true)
+      const newItem = await portfolioApi.create(formData)
+      setEditingItem(null)
+      await loadPortfolio()
+      // Seleccionar el nuevo item
+      setSelectedItem(newItem)
+    } catch (err: any) {
+      console.error('Error creando activo:', err)
+      throw err
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="activo-view loading">
@@ -105,16 +121,23 @@ export default function ActivoView() {
   return (
     <div className="activo-view">
       <header className="activo-header">
-        <h1>💼 Activos y Posiciones</h1>
-        <button onClick={loadPortfolio} className="refresh-button">
-          🔄 Actualizar
-        </button>
+        <h1>💼 Cartera</h1>
+        <div className="header-actions">
+          <button onClick={() => setEditingItem({} as PortfolioItem)} className="add-button">
+            ➕ Agregar Activo
+          </button>
+          <button onClick={loadPortfolio} className="refresh-button">
+            🔄 Actualizar
+          </button>
+        </div>
       </header>
 
-      {portfolioItems.length === 0 ? (
+      {portfolioItems.length === 0 && !editingItem ? (
         <div className="empty-state">
           <p>No hay activos en la cartera</p>
-          <p className="hint">Agrega activos desde la vista HOY</p>
+          <button onClick={() => setEditingItem({} as PortfolioItem)} className="add-button">
+            ➕ Agregar tu primer activo
+          </button>
         </div>
       ) : (
         <div className="activo-content">
@@ -218,13 +241,13 @@ export default function ActivoView() {
         <Modal
           isOpen={true}
           onClose={handleCancelEdit}
-          title={`Editar activo: ${editingItem.name}`}
+          title={editingItem.id ? `Editar activo: ${editingItem.name}` : 'Agregar nuevo activo'}
         >
           <PortfolioForm
-            onSubmit={handleUpdateSubmit}
+            onSubmit={editingItem.id ? handleUpdateSubmit : handleCreateSubmit}
             onCancel={handleCancelEdit}
             isSubmitting={isSubmitting}
-            initialData={{
+            initialData={editingItem.id ? {
               asset_type: editingItem.asset_type,
               name: editingItem.name,
               symbol: editingItem.symbol || '',
@@ -233,7 +256,7 @@ export default function ActivoView() {
               total_value: editingItem.total_value || '',
               currency: editingItem.currency || 'USD',
               notes: editingItem.notes || ''
-            }}
+            } : undefined}
           />
         </Modal>
       )}

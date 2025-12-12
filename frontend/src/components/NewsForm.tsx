@@ -1,9 +1,14 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './NewsForm.css'
 
 interface NewsFormProps {
   onSubmit: (title: string, body: string, source: string) => Promise<void>
   isSubmitting: boolean
+  initialData?: {
+    title?: string
+    body: string
+    source?: string
+  }
 }
 
 const MIN_LENGTH = 200
@@ -11,11 +16,20 @@ const MAX_LENGTH = 10000
 const MAX_TITLE_LENGTH = 200
 const MAX_SOURCE_LENGTH = 100
 
-export default function NewsForm({ onSubmit, isSubmitting }: NewsFormProps) {
-  const [title, setTitle] = useState('')
-  const [body, setBody] = useState('')
-  const [source, setSource] = useState('')
+export default function NewsForm({ onSubmit, isSubmitting, initialData }: NewsFormProps) {
+  const [title, setTitle] = useState(initialData?.title || '')
+  const [body, setBody] = useState(initialData?.body || '')
+  const [source, setSource] = useState(initialData?.source || '')
   const [error, setError] = useState<string | null>(null)
+
+  // Actualizar campos cuando cambia initialData
+  useEffect(() => {
+    if (initialData) {
+      setTitle(initialData.title || '')
+      setBody(initialData.body || '')
+      setSource(initialData.source || '')
+    }
+  }, [initialData])
 
   const bodyLength = body.length
   const isValid = bodyLength >= MIN_LENGTH && bodyLength <= MAX_LENGTH
@@ -31,10 +45,12 @@ export default function NewsForm({ onSubmit, isSubmitting }: NewsFormProps) {
 
     try {
       await onSubmit(title, body, source)
-      // Limpiar formulario después de éxito
-      setTitle('')
-      setBody('')
-      setSource('')
+      // Limpiar formulario después de éxito solo si no es edición
+      if (!initialData) {
+        setTitle('')
+        setBody('')
+        setSource('')
+      }
     } catch (err: any) {
       setError(err.message || 'Error al guardar la noticia')
     }

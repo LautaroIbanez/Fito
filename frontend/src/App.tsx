@@ -3,6 +3,7 @@ import Navigation, { View } from './components/Navigation'
 import HoyView from './views/HoyView'
 import SenalesView from './views/SenalesView'
 import ActivoView from './views/ActivoView'
+import NoticiasView from './views/NoticiasView'
 import Modal from './components/Modal'
 import NewsForm from './components/NewsForm'
 import PortfolioForm from './components/PortfolioForm'
@@ -139,7 +140,9 @@ function App() {
           
           {currentView === 'senales' && <SenalesView />}
           
-          {currentView === 'activo' && <ActivoView />}
+          {currentView === 'cartera' && <ActivoView />}
+          
+          {currentView === 'noticias' && <NoticiasView />}
         </main>
 
         {/* Modal para agregar noticia */}

@@ -28,13 +28,56 @@ export default function ProactiveAssistant({ onUpdate, autoLoad = true }: Proact
   const [error, setError] = useState<string | null>(null)
   const [isDegraded, setIsDegraded] = useState(false)
   const [isRecalculating, setIsRecalculating] = useState(false)
+  const [progressMessage, setProgressMessage] = useState<string | null>(null)
+  const [elapsedTime, setElapsedTime] = useState(0)
   const lastValidSynthesisRef = useRef<SynthesisData | null>(null)
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const startTimeRef = useRef<number | null>(null)
+  const hasGeneratedRef = useRef(false) // Flag para prevenir múltiples generaciones
+  const onUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null) // Para debounce de onUpdate
+  const onUpdateCalledRef = useRef(false) // Flag para asegurar que onUpdate solo se llama una vez
 
+  // Solo generar síntesis una vez al montar el componente
   useEffect(() => {
-    if (autoLoad) {
+    if (autoLoad && !hasGeneratedRef.current) {
+      hasGeneratedRef.current = true
       generateSynthesis()
     }
-  }, [autoLoad])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Array vacío para ejecutar solo una vez al montar
+
+  // Limpiar intervalos de progreso
+  const clearProgressTracking = () => {
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current)
+      progressIntervalRef.current = null
+    }
+    startTimeRef.current = null
+    setElapsedTime(0)
+    setProgressMessage(null)
+  }
+
+  // Iniciar seguimiento de progreso
+  const startProgressTracking = () => {
+    startTimeRef.current = Date.now()
+    setElapsedTime(0)
+    
+    progressIntervalRef.current = setInterval(() => {
+      if (startTimeRef.current) {
+        const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000)
+        setElapsedTime(elapsed)
+        
+        // Actualizar mensaje de progreso según el tiempo transcurrido
+        if (elapsed > 60 && elapsed <= 90) {
+          setProgressMessage('La generación está tomando más tiempo de lo esperado. Esto es normal cuando se estandarizan noticias...')
+        } else if (elapsed > 90 && elapsed <= 150) {
+          setProgressMessage('Procesando escenarios complejos. Esto puede tardar hasta 3 minutos...')
+        } else if (elapsed > 150) {
+          setProgressMessage('Casi terminando. El backend tiene hasta 3 minutos para completar...')
+        }
+      }
+    }, 1000)
+  }
 
   const generateSynthesis = async (isManual = false) => {
     try {
@@ -45,46 +88,75 @@ export default function ProactiveAssistant({ onUpdate, autoLoad = true }: Proact
       }
       setError(null)
       setIsDegraded(false)
+      clearProgressTracking()
+      startProgressTracking()
 
-      // Cargar datos en paralelo con timeout aumentado a 90 segundos
-      // (el backend puede tardar más si hay que estandarizar noticias)
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Timeout: La generación excedió 90 segundos')), 90000)
-      )
+      // Timeouts individuales alineados con el backend
+      // Resumen: 60s (suele ser rápido)
+      // Escenarios: 180s (coincide con SCENARIO_GENERATION_TIMEOUT del backend)
+      const SUMMARY_TIMEOUT = 60000
+      const SCENARIOS_TIMEOUT = 180000
 
-      // Wrapper para manejar errores de axios y otros errores
-      const safeGetSummary = async () => {
+      // Wrapper con timeout individual para resumen
+      const safeGetSummary = async (): Promise<any> => {
         try {
-          return await newsApi.getSituationSummary()
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Timeout: Resumen excedió 60 segundos')), SUMMARY_TIMEOUT)
+          )
+          const result = await Promise.race([
+            newsApi.getSituationSummary(),
+            timeoutPromise
+          ])
+          // Si el resumen llega rápido, actualizar progreso
+          if (startTimeRef.current) {
+            const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000)
+            if (elapsed < 30) {
+              setProgressMessage('Resumen obtenido. Generando escenarios...')
+            }
+          }
+          return result
         } catch (err: any) {
           console.warn('Error obteniendo resumen de situación:', err)
+          // Manejar errores 504 específicamente
+          if (err.response?.status === 504) {
+            throw new Error('Resumen: Timeout del servidor (504). El servidor tardó más de 60 segundos.')
+          }
           const errorMsg = err.response?.data?.detail || err.message || 'Error desconocido'
           throw new Error(`Resumen: ${errorMsg}`)
         }
       }
 
-      const safeGenerateScenarios = async () => {
+      // Wrapper con timeout individual para escenarios (180s para coincidir con backend)
+      const safeGenerateScenarios = async (): Promise<any> => {
         try {
-          return await scenariosApi.generate({ max_drivers: 3, include_portfolio_mapping: true })
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Timeout: Escenarios excedieron 180 segundos')), SCENARIOS_TIMEOUT)
+          )
+          // Reducir max_drivers a 2 para acelerar la generación
+          const result = await Promise.race([
+            scenariosApi.generate({ max_drivers: 2, include_portfolio_mapping: true }),
+            timeoutPromise
+          ])
+          return result
         } catch (err: any) {
           console.warn('Error generando escenarios:', err)
+          // Manejar errores 504 específicamente
+          if (err.response?.status === 504) {
+            throw new Error('Escenarios: Timeout del servidor (504). El servidor tardó más de 180 segundos.')
+          }
           const errorMsg = err.response?.data?.detail || err.message || 'Error desconocido'
           throw new Error(`Escenarios: ${errorMsg}`)
         }
       }
 
-      const dataPromise = Promise.allSettled([
+      // Ejecutar en paralelo con Promise.allSettled para manejar resultados parciales
+      // NO usar Promise.race con timeout global - permitir que cada llamada tenga su propio timeout
+      const result = await Promise.allSettled([
         safeGetSummary(),
         safeGenerateScenarios()
       ])
-
-      let result: PromiseSettledResult<any>[]
-      try {
-        result = await Promise.race([dataPromise, timeoutPromise])
-      } catch (timeoutError: any) {
-        // Si es timeout, lanzar error específico
-        throw new Error(timeoutError.message || 'Timeout: La generación excedió 90 segundos')
-      }
+      
+      clearProgressTracking()
 
       // Procesar resultados (ya son PromiseSettledResult)
       const summaryData = result[0]
@@ -194,8 +266,32 @@ export default function ProactiveAssistant({ onUpdate, autoLoad = true }: Proact
       if (summary || scenarios.length > 0) {
         setSynthesis(newSynthesis)
         lastValidSynthesisRef.current = newSynthesis
-        // Pasar datos al callback para que otros componentes puedan usarlos
-        onUpdate?.({ summary, synthesis: newSynthesis })
+        
+        // Pasar datos al callback solo UNA VEZ cuando tenemos datos válidos
+        // Usar debounce más largo y verificar que realmente hay datos nuevos
+        if (onUpdate && (summary || scenarios.length > 0) && !onUpdateCalledRef.current) {
+          // Limpiar timeout anterior si existe
+          if (onUpdateTimeoutRef.current) {
+            clearTimeout(onUpdateTimeoutRef.current)
+          }
+          
+          // Usar setTimeout con delay más largo para evitar loops infinitos
+          onUpdateTimeoutRef.current = setTimeout(() => {
+            if (!onUpdateCalledRef.current) {
+              console.log('[ProactiveAssistant] Llamando onUpdate con datos (primera vez):', {
+                hasSummary: !!summary,
+                scenariosCount: scenarios.length
+              })
+              onUpdateCalledRef.current = true // Marcar que ya llamamos a onUpdate
+              onUpdate({ summary, synthesis: newSynthesis })
+            } else {
+              console.log('[ProactiveAssistant] Ignorando llamada a onUpdate - ya se llamó anteriormente')
+            }
+            onUpdateTimeoutRef.current = null
+          }, 1000) // Aumentar delay a 1 segundo para evitar loops
+        } else if (onUpdateCalledRef.current) {
+          console.log('[ProactiveAssistant] No llamando onUpdate - ya se llamó anteriormente')
+        }
       } else {
         // Solo lanzar error si realmente no hay nada
         throw new Error('No se pudo generar síntesis: datos insuficientes')
@@ -203,11 +299,12 @@ export default function ProactiveAssistant({ onUpdate, autoLoad = true }: Proact
 
     } catch (err: any) {
       console.error('Error generando síntesis:', err)
+      clearProgressTracking()
       const errorMsg = err.message || 'Error al generar síntesis'
       setError(errorMsg)
       setIsDegraded(true)
 
-      // Si hay último resultado válido, mantenerlo y notificar
+      // Si hay último resultado válido, mantenerlo pero NO notificar (evitar loops)
       if (lastValidSynthesisRef.current) {
         const degradedSynthesis = {
           ...lastValidSynthesisRef.current,
@@ -215,14 +312,27 @@ export default function ProactiveAssistant({ onUpdate, autoLoad = true }: Proact
           errorMessage: errorMsg
         }
         setSynthesis(degradedSynthesis)
-        // Pasar datos degradados al callback para que otros componentes puedan usarlos
-        onUpdate?.({ summary: degradedSynthesis.summary, synthesis: degradedSynthesis })
+        // NO llamar onUpdate en modo degradado para evitar loops infinitos
+        // Los datos ya están disponibles en el componente
+        console.log('[ProactiveAssistant] Modo degradado - no llamando onUpdate para evitar loops')
       }
     } finally {
       setIsLoading(false)
       setIsRecalculating(false)
+      clearProgressTracking()
     }
   }
+
+  // Limpiar intervalos y timeouts al desmontar
+  useEffect(() => {
+    return () => {
+      clearProgressTracking()
+      if (onUpdateTimeoutRef.current) {
+        clearTimeout(onUpdateTimeoutRef.current)
+        onUpdateTimeoutRef.current = null
+      }
+    }
+  }, [])
 
   const handleManualRecalculate = () => {
     generateSynthesis(true)
@@ -255,6 +365,22 @@ export default function ProactiveAssistant({ onUpdate, autoLoad = true }: Proact
           <div className="spinner">⏳</div>
           <p>Generando síntesis HOY...</p>
           <p className="loading-hint">Analizando noticias, escenarios y activos expuestos</p>
+          {elapsedTime > 0 && (
+            <div className="progress-info">
+              <p className="elapsed-time">Tiempo transcurrido: {elapsedTime}s</p>
+              {progressMessage && (
+                <p className="progress-message">{progressMessage}</p>
+              )}
+              {elapsedTime > 60 && (
+                <div className="progress-bar-container">
+                  <div 
+                    className="progress-bar" 
+                    style={{ width: `${Math.min((elapsedTime / 180) * 100, 100)}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

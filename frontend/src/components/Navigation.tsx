@@ -1,6 +1,6 @@
 import './Navigation.css'
 
-export type View = 'hoy' | 'senales' | 'activo'
+export type View = 'hoy' | 'senales' | 'cartera' | 'noticias'
 
 interface NavigationProps {
   currentView: View
@@ -23,10 +23,16 @@ export default function Navigation({ currentView, onViewChange }: NavigationProp
         🔔 SEÑALES
       </button>
       <button
-        className={`nav-button ${currentView === 'activo' ? 'active' : ''}`}
-        onClick={() => onViewChange('activo')}
+        className={`nav-button ${currentView === 'cartera' ? 'active' : ''}`}
+        onClick={() => onViewChange('cartera')}
       >
-        💼 ACTIVO
+        💼 CARTERA
+      </button>
+      <button
+        className={`nav-button ${currentView === 'noticias' ? 'active' : ''}`}
+        onClick={() => onViewChange('noticias')}
+      >
+        📰 NOTICIAS
       </button>
     </nav>
   )

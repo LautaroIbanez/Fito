@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { newsApi, portfolioApi, scenariosApi, ScenarioData } from '../services/api'
 import ProactiveAssistant from '../components/ProactiveAssistant'
 import './HoyView.css'
@@ -76,9 +76,90 @@ export default function HoyView({ onAddNews, onManagePortfolio }: HoyViewProps) 
   }>>([])
   const [scenarios, setScenarios] = useState<ScenarioData[]>([])
   
+  // NO cargar datos automáticamente - el asistente proactivo los proporcionará
+  // Solo cargar datos de respaldo si el asistente falla completamente después de un tiempo
+  const hasLoadedRef = useRef(false)
+  const assistantDataReceivedRef = useRef(false)
+  const fallbackTimerRef = useRef<NodeJS.Timeout | null>(null)
+  
+  // Solo cargar datos de respaldo si el asistente no proporciona datos después de un tiempo razonable
   useEffect(() => {
-    loadHoyData()
+    // Si después de 10 segundos no hemos recibido datos del asistente, cargar datos propios como fallback
+    fallbackTimerRef.current = setTimeout(() => {
+      if (!assistantDataReceivedRef.current && !hasLoadedRef.current) {
+        console.log('[HoyView] Fallback: cargando datos propios después de 10s sin datos del asistente')
+        hasLoadedRef.current = true
+        loadHoyData()
+      }
+    }, 10000) // 10 segundos para dar tiempo al asistente
+    
+    return () => {
+      if (fallbackTimerRef.current) {
+        clearTimeout(fallbackTimerRef.current)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Callback para recibir datos del asistente proactivo
+  // TODOS LOS HOOKS DEBEN ESTAR ANTES DE LOS RETURNS CONDICIONALES
+  const isUpdatingFromAssistantRef = useRef(false)
+  
+  const handleAssistantUpdate = useCallback((assistantData?: { summary?: string; synthesis?: any }) => {
+    // Prevenir loops infinitos
+    if (isUpdatingFromAssistantRef.current) {
+      console.log('[HoyView] Ignorando actualización del asistente - ya procesando')
+      return
+    }
+    
+    isUpdatingFromAssistantRef.current = true
+    
+    // Cancelar el timer de fallback ya que recibimos datos del asistente
+    if (fallbackTimerRef.current) {
+      clearTimeout(fallbackTimerRef.current)
+      fallbackTimerRef.current = null
+    }
+    
+    assistantDataReceivedRef.current = true // Marcar que recibimos datos del asistente
+    
+    console.log('[HoyView] Recibiendo datos del asistente:', {
+      hasSummary: !!assistantData?.summary,
+      hasSynthesis: !!assistantData?.synthesis,
+      hasScenarios: !!(assistantData?.synthesis?.scenarios?.length)
+    })
+    
+    // Si el asistente tiene datos, usarlos (incluso en modo degradado)
+    if (assistantData?.summary || assistantData?.synthesis) {
+      if (assistantData.summary) {
+        const hints = synthesizeSummaryHints(assistantData.summary)
+        setSummaryHints(hints)
+        setSituationSummary(assistantData.summary)
+      }
+      
+      // Si también tiene "whyItMatters", usarlo
+      if (assistantData.synthesis?.whyItMatters) {
+        setWhyItMatters(assistantData.synthesis.whyItMatters)
+      }
+      
+      // Si tiene top assets, usarlos también
+      if (assistantData.synthesis?.topAssets && assistantData.synthesis.topAssets.length > 0) {
+        setTopSensitiveAssets(assistantData.synthesis.topAssets)
+      }
+      
+      // Si tiene escenarios, usarlos también
+      if (assistantData.synthesis?.scenarios && assistantData.synthesis.scenarios.length > 0) {
+        setScenarios(assistantData.synthesis.scenarios)
+      }
+      
+      // Marcar que ya no estamos cargando
+      setIsLoading(false)
+    }
+    
+    // Resetear el flag después de un breve delay
+    setTimeout(() => {
+      isUpdatingFromAssistantRef.current = false
+    }, 3000) // Aumentar a 3 segundos para evitar loops
+  }, []) // Array vacío porque solo usamos refs y setters que son estables
 
   const loadHoyData = async () => {
     try {
@@ -154,6 +235,7 @@ export default function HoyView({ onAddNews, onManagePortfolio }: HoyViewProps) 
     }
   }
 
+  // Ahora sí podemos hacer returns condicionales después de todos los hooks
   if (isLoading) {
     return (
       <div className="hoy-view loading">
@@ -171,35 +253,6 @@ export default function HoyView({ onAddNews, onManagePortfolio }: HoyViewProps) 
         </button>
       </div>
     )
-  }
-
-  // Callback para recibir datos del asistente proactivo
-  const handleAssistantUpdate = (assistantData?: { summary?: string; synthesis?: any }) => {
-    // Si el asistente tiene datos, usarlos (incluso en modo degradado)
-    if (assistantData?.summary) {
-      const hints = synthesizeSummaryHints(assistantData.summary)
-      setSummaryHints(hints)
-      setSituationSummary(assistantData.summary)
-      
-      // Si también tiene "whyItMatters", usarlo
-      if (assistantData.synthesis?.whyItMatters) {
-        setWhyItMatters(assistantData.synthesis.whyItMatters)
-      }
-      
-      // Si tiene top assets, usarlos también
-      if (assistantData.synthesis?.topAssets && assistantData.synthesis.topAssets.length > 0) {
-        setTopSensitiveAssets(assistantData.synthesis.topAssets)
-      }
-      
-      // Si tiene escenarios, usarlos también
-      if (assistantData.synthesis?.scenarios && assistantData.synthesis.scenarios.length > 0) {
-        setScenarios(assistantData.synthesis.scenarios)
-      }
-    }
-    // También recargar datos propios en paralelo (pero no bloquear si ya tenemos datos del asistente)
-    if (!assistantData?.summary) {
-      loadHoyData()
-    }
   }
 
   return (
