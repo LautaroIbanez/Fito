@@ -290,10 +290,21 @@ export const suggestionsApi = {
 
 
 
-export interface SituationSummary {
+export interface BatchSummary {
+  batch_number: number
+  news_count: number
   summary: string
+  tokens_used?: number
+}
+
+export interface SituationSummary {
+  summary: string  // Mantener para compatibilidad
+  meta_summary: string
+  batch_summaries: BatchSummary[]
   news_count: number
   recent_news_count: number
+  batches_processed: number
+  total_prompt_tokens: number
   generated_at: string
   has_content: boolean
   tokens_used?: number

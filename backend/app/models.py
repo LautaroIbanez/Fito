@@ -970,14 +970,33 @@ class WatchlistListResponse(BaseModel):
 
 # ==================== Situation Summary Models ====================
 
+class BatchSummary(BaseModel):
+    """Resumen parcial de un lote de noticias."""
+    batch_number: int = Field(..., description="Número del lote")
+    news_count: int = Field(..., description="Cantidad de noticias en este lote")
+    summary: str = Field(..., description="Resumen del lote")
+    tokens_used: Optional[int] = Field(None, description="Tokens utilizados para este lote")
+
+
 class SituationSummaryResponse(BaseModel):
     """Respuesta con resumen de situación actual."""
-    summary: str = Field(..., description="Resumen de la situación actual del mercado")
+    summary: str = Field(..., description="Resumen de la situación actual del mercado (compatibilidad)")
+    meta_summary: str = Field(default="", description="Meta-resumen consolidado de todos los lotes")
+    batch_summaries: List[BatchSummary] = Field(default_factory=list, description="Resúmenes parciales por lote")
     news_count: int = Field(..., description="Total de noticias analizadas")
     recent_news_count: int = Field(..., description="Noticias recientes consideradas")
+    batches_processed: int = Field(default=1, description="Número de lotes procesados")
+    total_prompt_tokens: int = Field(default=0, description="Tokens estimados del prompt total")
     generated_at: str = Field(..., description="Fecha de generación del resumen")
     has_content: bool = Field(..., description="Si el resumen tiene contenido")
-    tokens_used: Optional[int] = Field(None, description="Tokens utilizados en la generación")
+    tokens_used: Optional[int] = Field(None, description="Tokens totales utilizados en la generación")
+    
+    def model_post_init(self, __context: any) -> None:
+        """Asegurar que summary y meta_summary tengan el mismo valor si uno está vacío."""
+        if not self.meta_summary and self.summary:
+            object.__setattr__(self, 'meta_summary', self.summary)
+        elif not self.summary and self.meta_summary:
+            object.__setattr__(self, 'summary', self.meta_summary)
 
 
 # ==================== Normalized News Models ====================

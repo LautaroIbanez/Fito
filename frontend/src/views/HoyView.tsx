@@ -61,7 +61,9 @@ function synthesizeSummaryHints(summary: string): string[] {
 }
 
 export default function HoyView({ onAddNews, onManagePortfolio }: HoyViewProps) {
-  const [isLoading, setIsLoading] = useState(true)
+  // Inicializar isLoading en false ya que no cargamos datos automáticamente
+  // Solo se activa cuando el usuario solicita datos de respaldo manualmente
+  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
   // Datos principales
@@ -77,33 +79,17 @@ export default function HoyView({ onAddNews, onManagePortfolio }: HoyViewProps) 
   const [scenarios, setScenarios] = useState<ScenarioData[]>([])
   
   // NO cargar datos automáticamente - el asistente proactivo los proporcionará
-  // Solo cargar datos de respaldo si el asistente falla completamente después de un tiempo
+  // Solo cargar datos de respaldo manualmente si el usuario lo solicita
   const hasLoadedRef = useRef(false)
   const assistantDataReceivedRef = useRef(false)
-  const fallbackTimerRef = useRef<NodeJS.Timeout | null>(null)
-  
-  // Solo cargar datos de respaldo si el asistente no proporciona datos después de un tiempo razonable
-  useEffect(() => {
-    // Si después de 10 segundos no hemos recibido datos del asistente, cargar datos propios como fallback
-    fallbackTimerRef.current = setTimeout(() => {
-      if (!assistantDataReceivedRef.current && !hasLoadedRef.current) {
-        console.log('[HoyView] Fallback: cargando datos propios después de 10s sin datos del asistente')
-        hasLoadedRef.current = true
-        loadHoyData()
-      }
-    }, 10000) // 10 segundos para dar tiempo al asistente
-    
-    return () => {
-      if (fallbackTimerRef.current) {
-        clearTimeout(fallbackTimerRef.current)
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  const [showFallbackOption, setShowFallbackOption] = useState(false)
 
   // Callback para recibir datos del asistente proactivo
   // TODOS LOS HOOKS DEBEN ESTAR ANTES DE LOS RETURNS CONDICIONALES
   const isUpdatingFromAssistantRef = useRef(false)
+  const generateSynthesisRef = useRef<(() => void) | null>(null)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [hasSynthesis, setHasSynthesis] = useState(false)
   
   const handleAssistantUpdate = useCallback((assistantData?: { summary?: string; synthesis?: any }) => {
     // Prevenir loops infinitos
@@ -114,26 +100,27 @@ export default function HoyView({ onAddNews, onManagePortfolio }: HoyViewProps) 
     
     isUpdatingFromAssistantRef.current = true
     
-    // Cancelar el timer de fallback ya que recibimos datos del asistente
-    if (fallbackTimerRef.current) {
-      clearTimeout(fallbackTimerRef.current)
-      fallbackTimerRef.current = null
-    }
-    
     assistantDataReceivedRef.current = true // Marcar que recibimos datos del asistente
+    setShowFallbackOption(false) // Ocultar opción de fallback si tenemos datos del asistente
     
     console.log('[HoyView] Recibiendo datos del asistente:', {
       hasSummary: !!assistantData?.summary,
       hasSynthesis: !!assistantData?.synthesis,
-      hasScenarios: !!(assistantData?.synthesis?.scenarios?.length)
+      hasScenarios: !!(assistantData?.synthesis?.scenarios?.length),
+      scenariosCount: assistantData?.synthesis?.scenarios?.length || 0,
+      scenarios: assistantData?.synthesis?.scenarios?.map(s => ({ driver: s.driver, hasScenarios: !!s.scenarios })) || []
     })
     
     // Si el asistente tiene datos, usarlos (incluso en modo degradado)
+    // Esto evita que el fallback haga llamadas duplicadas
     if (assistantData?.summary || assistantData?.synthesis) {
-      if (assistantData.summary) {
-        const hints = synthesizeSummaryHints(assistantData.summary)
+      // Priorizar meta_summary si está disponible (procesamiento por lotes), sino usar summary (compatibilidad)
+      // El summary ya viene con meta_summary aplicado desde ProactiveAssistant
+      const summaryToUse = assistantData.summary || ''
+      if (summaryToUse) {
+        const hints = synthesizeSummaryHints(summaryToUse)
         setSummaryHints(hints)
-        setSituationSummary(assistantData.summary)
+        setSituationSummary(summaryToUse)
       }
       
       // Si también tiene "whyItMatters", usarlo
@@ -148,11 +135,24 @@ export default function HoyView({ onAddNews, onManagePortfolio }: HoyViewProps) 
       
       // Si tiene escenarios, usarlos también
       if (assistantData.synthesis?.scenarios && assistantData.synthesis.scenarios.length > 0) {
+        console.log('[HoyView] Actualizando escenarios:', assistantData.synthesis.scenarios.length, 'escenarios recibidos')
         setScenarios(assistantData.synthesis.scenarios)
+      } else {
+        console.log('[HoyView] No hay escenarios en los datos del asistente:', {
+          hasSynthesis: !!assistantData.synthesis,
+          scenarios: assistantData.synthesis?.scenarios,
+          scenariosLength: assistantData.synthesis?.scenarios?.length
+        })
       }
       
-      // Marcar que ya no estamos cargando
+      // Marcar que ya no estamos cargando y que tenemos síntesis
       setIsLoading(false)
+      setHasSynthesis(true)
+      setIsGenerating(false)
+      setShowFallbackOption(false) // Ocultar opción de fallback
+      
+      // Prevenir que loadHoyData se ejecute si ya tenemos datos del asistente
+      hasLoadedRef.current = false // Permitir recarga manual si el usuario lo desea
     }
     
     // Resetear el flag después de un breve delay
@@ -161,10 +161,27 @@ export default function HoyView({ onAddNews, onManagePortfolio }: HoyViewProps) 
     }, 3000) // Aumentar a 3 segundos para evitar loops
   }, []) // Array vacío porque solo usamos refs y setters que son estables
 
-  const loadHoyData = async () => {
+  const loadHoyData = async (force: boolean = false) => {
+    // Guardas: no cargar si el asistente ya tiene datos o está generando (a menos que sea forzado)
+    if (!force) {
+      if (assistantDataReceivedRef.current) {
+        console.log('[HoyView] Ignorando loadHoyData - asistente ya proporcionó datos')
+        return
+      }
+      if (isGenerating) {
+        console.log('[HoyView] Ignorando loadHoyData - asistente está generando síntesis')
+        return
+      }
+      if (hasSynthesis && (situationSummary || scenarios.length > 0)) {
+        console.log('[HoyView] Ignorando loadHoyData - ya hay datos de síntesis disponibles')
+        return
+      }
+    }
+    
     try {
       setIsLoading(true)
       setError(null)
+      hasLoadedRef.current = true // Marcar que ya cargamos datos de respaldo
       
       // Cargar datos en paralelo para respuesta rápida
       // Usar timeout más corto para escenarios (60s) ya que el asistente maneja el timeout largo
@@ -248,17 +265,106 @@ export default function HoyView({ onAddNews, onManagePortfolio }: HoyViewProps) 
     return (
       <div className="hoy-view error">
         <div className="error-message">⚠️ {error}</div>
-        <button onClick={loadHoyData} className="retry-button">
+        <button onClick={() => loadHoyData(true)} className="retry-button">
           Reintentar
         </button>
       </div>
     )
   }
 
+  const handleGenerateSynthesis = () => {
+    if (!isGenerating) {
+      setIsGenerating(true)
+      // Usar setTimeout para asegurar que el componente ProactiveAssistant se monte primero
+      setTimeout(() => {
+        if (generateSynthesisRef.current) {
+          generateSynthesisRef.current()
+        } else {
+          console.error('[HoyView] generateSynthesisRef.current no está disponible')
+          setIsGenerating(false)
+        }
+      }, 100) // Pequeño delay para asegurar que el componente se monte
+    }
+  }
+
   return (
     <div className="hoy-view">
-      {/* Asistente IA Proactivo - se carga automáticamente */}
-      <ProactiveAssistant autoLoad={true} onUpdate={handleAssistantUpdate} />
+      {/* Botón para generar síntesis manualmente */}
+      {!hasSynthesis && !isGenerating && (
+        <div className="generate-synthesis-prompt">
+          <div className="prompt-content">
+            <h2>🤖 Asistente IA Proactivo</h2>
+            <p>Genera una síntesis completa de la situación actual del mercado, escenarios y activos expuestos.</p>
+            <div className="prompt-actions">
+              <button 
+                onClick={handleGenerateSynthesis} 
+                className="generate-button"
+                disabled={isGenerating}
+              >
+                🚀 Generar Síntesis HOY
+              </button>
+              {!assistantDataReceivedRef.current && !hasLoadedRef.current && (
+                <button 
+                  onClick={() => {
+                    setShowFallbackOption(true)
+                    loadHoyData(false) // No forzar, pero permitir si no hay datos del asistente
+                  }}
+                  className="fallback-button"
+                  disabled={isLoading || isGenerating}
+                >
+                  📊 Cargar Datos de Respaldo
+                </button>
+              )}
+            </div>
+            {showFallbackOption && !assistantDataReceivedRef.current && (
+              <p className="fallback-hint">
+                ℹ️ Cargando datos directamente sin síntesis del asistente. 
+                Puedes generar la síntesis completa más tarde.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Indicador de generación en progreso */}
+      {isGenerating && (
+        <div className="generating-indicator">
+          <div className="spinner">⏳</div>
+          <p>Generando síntesis... Esto puede tardar hasta 3 minutos.</p>
+          {!assistantDataReceivedRef.current && (
+            <button 
+              onClick={() => {
+                setShowFallbackOption(true)
+                loadHoyData(false) // No forzar, pero permitir si no hay datos del asistente
+              }}
+              className="fallback-button-small"
+              disabled={isLoading}
+            >
+              📊 Cargar datos de respaldo mientras tanto
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Asistente IA Proactivo - siempre montado pero solo visible cuando hay síntesis o se está generando */}
+      {/* Montarlo siempre asegura que el ref esté disponible cuando se necesite */}
+      <div style={{ display: (hasSynthesis || isGenerating) ? 'block' : 'none' }}>
+        <ProactiveAssistant 
+          autoLoad={false} 
+          onUpdate={(data) => {
+            // Siempre resetear isGenerating cuando se complete (éxito o error)
+            setIsGenerating(false)
+            if (data?.summary || data?.synthesis) {
+              setHasSynthesis(true)
+              handleAssistantUpdate(data)
+            } else {
+              // Si no hay datos pero se llamó onUpdate, fue un error - mantener el componente visible para mostrar el error
+              setHasSynthesis(true)
+            }
+          }}
+          onGenerateRef={generateSynthesisRef}
+        />
+      </div>
 
       {/* Bloques secundarios en grid */}
       <div className="hoy-blocks-grid">
@@ -374,7 +480,7 @@ export default function HoyView({ onAddNews, onManagePortfolio }: HoyViewProps) 
           <button onClick={onManagePortfolio} className="action-button">
             💼 Gestionar cartera
           </button>
-          <button onClick={loadHoyData} className="action-button">
+          <button onClick={() => loadHoyData(true)} className="action-button">
             🔄 Actualizar vista
           </button>
         </div>

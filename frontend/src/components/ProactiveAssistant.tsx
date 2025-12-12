@@ -5,6 +5,7 @@ import './ProactiveAssistant.css'
 interface ProactiveAssistantProps {
   onUpdate?: (data?: { summary?: string; synthesis?: SynthesisData }) => void
   autoLoad?: boolean
+  onGenerateRef?: React.MutableRefObject<(() => void) | null>
 }
 
 interface SynthesisData {
@@ -22,9 +23,9 @@ interface SynthesisData {
   errorMessage?: string
 }
 
-export default function ProactiveAssistant({ onUpdate, autoLoad = true }: ProactiveAssistantProps) {
+export default function ProactiveAssistant({ onUpdate, autoLoad = true, onGenerateRef }: ProactiveAssistantProps) {
   const [synthesis, setSynthesis] = useState<SynthesisData | null>(null)
-  const [isLoading, setIsLoading] = useState(autoLoad)
+  const [isLoading, setIsLoading] = useState(false) // Iniciar en false, no auto-load
   const [error, setError] = useState<string | null>(null)
   const [isDegraded, setIsDegraded] = useState(false)
   const [isRecalculating, setIsRecalculating] = useState(false)
@@ -37,14 +38,38 @@ export default function ProactiveAssistant({ onUpdate, autoLoad = true }: Proact
   const onUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null) // Para debounce de onUpdate
   const onUpdateCalledRef = useRef(false) // Flag para asegurar que onUpdate solo se llama una vez
 
-  // Solo generar síntesis una vez al montar el componente
+  // Solo generar síntesis automáticamente si autoLoad es true
+  // IMPORTANTE: Con autoLoad=false (usado en HoyView), NO se ejecuta automáticamente
   useEffect(() => {
-    if (autoLoad && !hasGeneratedRef.current) {
+    if (autoLoad && !hasGeneratedRef.current && !isLoading && !isRecalculating) {
       hasGeneratedRef.current = true
       generateSynthesis()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // Array vacío para ejecutar solo una vez al montar
+  }, [autoLoad]) // Depender de autoLoad
+
+  // Exponer función de generación mediante ref si se proporciona
+  // IMPORTANTE: Este useEffect debe ejecutarse inmediatamente al montar para que el ref esté disponible
+  useEffect(() => {
+    if (onGenerateRef) {
+      onGenerateRef.current = () => {
+        console.log('[ProactiveAssistant] generateSynthesis llamado desde ref', { isLoading, isRecalculating })
+        if (!isLoading && !isRecalculating) {
+          hasGeneratedRef.current = true
+          generateSynthesis(true)
+        } else {
+          console.warn('[ProactiveAssistant] Ignorando llamada - ya está generando')
+        }
+      }
+      console.log('[ProactiveAssistant] Ref expuesto correctamente')
+    }
+    return () => {
+      if (onGenerateRef) {
+        onGenerateRef.current = null
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Ejecutar solo una vez al montar, no depender de isLoading/isRecalculating para evitar que el ref cambie
 
   // Limpiar intervalos de progreso
   const clearProgressTracking = () => {
@@ -175,9 +200,25 @@ export default function ProactiveAssistant({ onUpdate, autoLoad = true }: Proact
 
       // Procesar resumen de situación
       if (summaryData.status === 'fulfilled' && summaryData.value.has_content) {
-        summary = summaryData.value.summary || ''
+        // Priorizar meta_summary si está disponible (procesamiento por lotes), sino usar summary (compatibilidad)
+        summary = summaryData.value.meta_summary || summaryData.value.summary || ''
         const paragraphs = summary.split('\n').filter(p => p.trim())
         whyItMatters = paragraphs.slice(0, 2).join('\n\n')
+        
+        // Log de métricas si están disponibles (procesamiento por lotes)
+        if (summaryData.value.batches_processed && summaryData.value.batches_processed > 1) {
+          console.log(
+            `[ProactiveAssistant] Resumen generado desde ${summaryData.value.batches_processed} lotes, ` +
+            `${summaryData.value.recent_news_count} noticias recientes, ` +
+            `~${summaryData.value.total_prompt_tokens} tokens de prompt estimados, ` +
+            `${summaryData.value.tokens_used || 'N/A'} tokens totales usados`
+          )
+          if (summaryData.value.batch_summaries && summaryData.value.batch_summaries.length > 0) {
+            console.log(
+              `[ProactiveAssistant] Resúmenes parciales: ${summaryData.value.batch_summaries.length} lotes procesados`
+            )
+          }
+        }
       } else {
         console.warn('Resumen de situación no disponible:', summaryData.status === 'rejected' ? summaryData.reason : 'sin contenido')
         hasPartialData = true
@@ -267,30 +308,34 @@ export default function ProactiveAssistant({ onUpdate, autoLoad = true }: Proact
         setSynthesis(newSynthesis)
         lastValidSynthesisRef.current = newSynthesis
         
-        // Pasar datos al callback solo UNA VEZ cuando tenemos datos válidos
-        // Usar debounce más largo y verificar que realmente hay datos nuevos
-        if (onUpdate && (summary || scenarios.length > 0) && !onUpdateCalledRef.current) {
+        // Pasar datos al callback cuando tenemos datos válidos
+        // Si es una generación manual, siempre llamar onUpdate
+        if (onUpdate && (summary || scenarios.length > 0)) {
           // Limpiar timeout anterior si existe
           if (onUpdateTimeoutRef.current) {
             clearTimeout(onUpdateTimeoutRef.current)
           }
           
-          // Usar setTimeout con delay más largo para evitar loops infinitos
+          // Usar setTimeout con delay para evitar loops infinitos
           onUpdateTimeoutRef.current = setTimeout(() => {
-            if (!onUpdateCalledRef.current) {
-              console.log('[ProactiveAssistant] Llamando onUpdate con datos (primera vez):', {
-                hasSummary: !!summary,
-                scenariosCount: scenarios.length
-              })
-              onUpdateCalledRef.current = true // Marcar que ya llamamos a onUpdate
+            console.log('[ProactiveAssistant] Llamando onUpdate con datos:', {
+              hasSummary: !!summary,
+              scenariosCount: scenarios.length,
+              scenarios: scenarios.map(s => ({ driver: s.driver, scenariosCount: Object.keys(s.scenarios || {}).length })),
+              topAssetsCount: topAssets.length,
+              isManual: isManual
+            })
+            // Si es manual, siempre actualizar; si es automático, solo una vez
+            if (isManual || !onUpdateCalledRef.current) {
+              if (!isManual) {
+                onUpdateCalledRef.current = true
+              }
               onUpdate({ summary, synthesis: newSynthesis })
             } else {
-              console.log('[ProactiveAssistant] Ignorando llamada a onUpdate - ya se llamó anteriormente')
+              console.log('[ProactiveAssistant] No llamando onUpdate - ya fue llamado antes (automático)')
             }
             onUpdateTimeoutRef.current = null
-          }, 1000) // Aumentar delay a 1 segundo para evitar loops
-        } else if (onUpdateCalledRef.current) {
-          console.log('[ProactiveAssistant] No llamando onUpdate - ya se llamó anteriormente')
+          }, 500)
         }
       } else {
         // Solo lanzar error si realmente no hay nada
@@ -304,7 +349,7 @@ export default function ProactiveAssistant({ onUpdate, autoLoad = true }: Proact
       setError(errorMsg)
       setIsDegraded(true)
 
-      // Si hay último resultado válido, mantenerlo pero NO notificar (evitar loops)
+      // Si hay último resultado válido, mantenerlo y notificar si es generación manual
       if (lastValidSynthesisRef.current) {
         const degradedSynthesis = {
           ...lastValidSynthesisRef.current,
@@ -312,14 +357,28 @@ export default function ProactiveAssistant({ onUpdate, autoLoad = true }: Proact
           errorMessage: errorMsg
         }
         setSynthesis(degradedSynthesis)
-        // NO llamar onUpdate en modo degradado para evitar loops infinitos
-        // Los datos ya están disponibles en el componente
-        console.log('[ProactiveAssistant] Modo degradado - no llamando onUpdate para evitar loops')
+        // Si es generación manual, notificar el error para que el usuario sepa
+        if (onUpdate && isManual) {
+          onUpdate({ summary: degradedSynthesis.summary, synthesis: degradedSynthesis })
+        } else {
+          console.log('[ProactiveAssistant] Modo degradado - no llamando onUpdate para evitar loops')
+        }
+      } else if (onUpdate && isManual) {
+        // Si no hay síntesis previa y es manual, notificar el error para resetear estado
+        setTimeout(() => {
+          onUpdate()
+        }, 100)
       }
     } finally {
       setIsLoading(false)
       setIsRecalculating(false)
       clearProgressTracking()
+      // Si es generación manual y no se llamó onUpdate, notificar que terminó
+      if (isManual && onUpdate && !onUpdateCalledRef.current) {
+        setTimeout(() => {
+          onUpdate()
+        }, 200)
+      }
     }
   }
 

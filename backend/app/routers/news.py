@@ -356,8 +356,12 @@ async def get_situation_summary(
             # Retornar respuesta vacía sin error
             return SituationSummaryResponse(
                 summary="",
+                meta_summary="",
+                batch_summaries=[],
                 news_count=0,
                 recent_news_count=0,
+                batches_processed=0,
+                total_prompt_tokens=0,
                 generated_at=datetime.now(timezone.utc).isoformat(),
                 has_content=False,
                 tokens_used=None
@@ -369,11 +373,24 @@ async def get_situation_summary(
             response_item = build_news_item_response(item)
             news_responses.append(response_item)
         
-        # Generar resumen
+        # Generar resumen con procesamiento por lotes
+        # Usar batching automático cuando hay más de 5 noticias para optimizar tokens
         summary_service = SituationSummaryService()
-        summary_result = summary_service.generate_summary(news_responses)
+        use_batching = len(news_responses) > 5
+        summary_result = summary_service.generate_summary(
+            news_responses, 
+            use_batching=use_batching,
+            batch_size=5  # 5 noticias por lote (configurable)
+        )
         
-        logger.info(f"Resumen de situación generado para {summary_result['news_count']} noticias")
+        # Log detallado de métricas
+        logger.info(
+            f"Resumen de situación generado: {summary_result['news_count']} noticias totales, "
+            f"{summary_result['recent_news_count']} noticias recientes, "
+            f"{summary_result['batches_processed']} lotes procesados, "
+            f"~{summary_result['total_prompt_tokens']} tokens de prompt estimados, "
+            f"{summary_result.get('tokens_used', 'N/A')} tokens totales usados"
+        )
         
         return SituationSummaryResponse(**summary_result)
         
