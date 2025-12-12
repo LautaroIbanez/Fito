@@ -308,6 +308,27 @@ export interface PortfolioRanking {
   technical_score: number
   color: 'green' | 'amber' | 'red'
   status_text: string
+  action_recommendation?: string
+  updated_at?: string
+  thresholds?: {
+    red_max: number
+    amber_min: number
+    amber_max: number
+    green_min: number
+    green_max: number
+  }
+  weights?: {
+    sentiment: number
+    technical: number
+  }
+  contributions?: {
+    sentiment: number
+    technical: number
+  }
+  factor_push?: {
+    sentiment: number
+    technical: number
+  }
   details: {
     sentiment: {
       score: number
@@ -315,6 +336,16 @@ export interface PortfolioRanking {
       company_news_count: number
       sector_news_count: number
       headlines: string[]
+      data_quality?: 'high' | 'medium' | 'low' | 'insufficient'
+      last_news_date?: string
+      indicators_used?: string[]
+      reliability_note?: string
+      company_score?: number
+      sector_score?: number
+      sector_synthesis?: string
+      lookback_days?: number
+      company_last_date?: string
+      sector_last_date?: string
     }
     technical: {
       score: number
@@ -323,7 +354,13 @@ export interface PortfolioRanking {
         value: number
         score: number
         description: string
+        indicator?: string
+        period?: string
       }>
+      data_quality?: 'high' | 'medium' | 'low' | 'insufficient'
+      last_update?: string
+      indicators_used?: string[]
+      reliability_note?: string
     }
   }
 }

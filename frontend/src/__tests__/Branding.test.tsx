@@ -155,3 +155,4 @@ describe('Accessibility', () => {
     expect(styles).toBeTruthy()
   })
 })
+

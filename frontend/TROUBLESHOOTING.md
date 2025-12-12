@@ -107,3 +107,4 @@ Si sigues teniendo problemas, comparte:
 2. **Salida de `npm run dev`** en la terminal
 3. **Versión de Node**: `node --version`
 4. **Versión de npm**: `npm --version`
+
