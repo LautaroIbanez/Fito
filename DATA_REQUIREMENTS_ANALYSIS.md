@@ -517,3 +517,4 @@ if (scenariosData.status === 'fulfilled') {
 - ✅ Maneja correctamente respuestas vacías
 - ✅ Muestra error si ambos (resumen y escenarios) fallan
 - ✅ Cierra spinner correctamente
+

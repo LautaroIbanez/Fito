@@ -235,3 +235,4 @@ Responde en formato JSON con esta estructura:
             logger.info(f"Driver '{driver_name}' aceptado con {len(valid_ids)} noticias válidas")
         
         return drivers
+

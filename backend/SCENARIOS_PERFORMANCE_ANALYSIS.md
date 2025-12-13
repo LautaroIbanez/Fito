@@ -394,3 +394,4 @@ La solución recomendada (Opción 3 + Opción 5) proporciona:
 - ✅ Solución de raíz sin complejidad excesiva (Opción 3)
 - ✅ Mejor experiencia de usuario (UI visible inmediatamente)
 - ✅ Mantenibilidad (código simple, sin infraestructura adicional)
+

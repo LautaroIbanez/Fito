@@ -51,7 +51,7 @@
   border-radius: var(--radius-md);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
-  color: #4a4a4a;
+  color: #1a1a1a;
 }
 
 .signal-card.positive .signal-direction {
@@ -90,7 +90,7 @@
 
 .confidence-badge.low {
   background: var(--color-gray-100);
-  color: var(--text-secondary);
+  color: #1a1a1a;
 }
 
 .source-badge {
@@ -98,7 +98,7 @@
   background: var(--color-gray-100);
   border-radius: var(--radius-md);
   font-size: var(--font-size-xs);
-  color: var(--text-secondary);
+  color: #1a1a1a;
 }
 
 .signal-section {
@@ -156,7 +156,7 @@
 .invalidators-list {
   margin: var(--spacing-2) 0 0 0;
   padding-left: var(--spacing-5);
-  color: var(--text-secondary);
+  color: #1a1a1a;
   font-size: var(--font-size-sm);
 }
 
@@ -180,7 +180,7 @@
 
 .score-label {
   font-size: var(--font-size-sm);
-  color: #4a4a4a;
+  color: #1a1a1a;
   font-weight: var(--font-weight-semibold);
 }
 
@@ -230,3 +230,4 @@
     justify-content: space-between;
   }
 }
+

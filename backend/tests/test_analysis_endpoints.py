@@ -197,3 +197,4 @@ class TestAnalysisEndpoints:
         assert response.score is None  # Debería ser None, no AttributeError
         assert response.score_components is None
         assert response.is_obsolete is False  # Valor por defecto
+

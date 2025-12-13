@@ -448,3 +448,4 @@ class TestMixedTechnicalSentimentCases:
         # Depende de los pesos, pero debería ser ámbar o verde
         assert color in ["green", "amber"]
 
+

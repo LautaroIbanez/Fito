@@ -73,3 +73,4 @@ frontend/
 - `npm run build` - Construye para producción
 - `npm run preview` - Previsualiza build de producción
 
+

@@ -511,3 +511,4 @@ class TestDataInsufficiencyHandling:
             # pero con calidad baja
             assert result["breakdown"]["sentiment"]["details"]["data_quality"] in ["low", "insufficient"]
             assert result["breakdown"]["coverage"]["details"]["data_quality"] in ["low", "medium"]
+

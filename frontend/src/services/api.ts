@@ -457,19 +457,37 @@ export interface ScenarioData {
       title: string
       description: string
       confidence: number
+      assumptions?: Array<{ description: string; probability?: number; timeframe?: string }>
+      risks?: Array<{ description: string; severity?: string; mitigation?: string }>
       invalidators?: Array<{ condition: string; description: string }>
+      timeframe?: string
+      market_impact?: string
+      suggested_actions?: string[]
+      triggers?: string[]
     }
     risk?: { 
       title: string
       description: string
       confidence: number
+      assumptions?: Array<{ description: string; probability?: number; timeframe?: string }>
+      risks?: Array<{ description: string; severity?: string; mitigation?: string }>
       invalidators?: Array<{ condition: string; description: string }>
+      timeframe?: string
+      market_impact?: string
+      suggested_actions?: string[]
+      triggers?: string[]
     }
     opportunity?: { 
       title: string
       description: string
       confidence: number
+      assumptions?: Array<{ description: string; probability?: number; timeframe?: string }>
+      risks?: Array<{ description: string; severity?: string; mitigation?: string }>
       invalidators?: Array<{ condition: string; description: string }>
+      timeframe?: string
+      market_impact?: string
+      suggested_actions?: string[]
+      triggers?: string[]
     }
   }
   portfolio_mappings: Array<{
@@ -478,6 +496,7 @@ export interface ScenarioData {
     name?: string
     sensitivity: number
     confidence: number
+    impact_description?: string
   }>
 }
 

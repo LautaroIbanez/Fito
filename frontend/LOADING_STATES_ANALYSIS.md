@@ -506,3 +506,4 @@ useEffect(() => {
 1. **Alta prioridad:** Corregir renderizado de sección escenarios para distinguir estados
 2. **Media prioridad:** Agregar manejo de error en sección escenarios
 3. **Baja prioridad:** Mejorar mensajes de estado vacío
+

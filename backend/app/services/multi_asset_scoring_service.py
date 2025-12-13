@@ -649,3 +649,4 @@ class MultiAssetScoringService:
                 },
                 "recommendation": "Esperar más datos antes de tomar decisiones basadas en este ranking"
             }
+

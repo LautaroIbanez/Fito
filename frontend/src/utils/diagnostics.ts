@@ -198,3 +198,4 @@ export const diagnostics = new Diagnostics()
 if (typeof window !== 'undefined') {
   (window as any).diagnostics = diagnostics
 }
+

@@ -108,3 +108,4 @@ Si sigues teniendo problemas, comparte:
 3. **Versión de Node**: `node --version`
 4. **Versión de npm**: `npm --version`
 
+

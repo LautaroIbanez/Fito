@@ -1100,6 +1100,9 @@ class Scenario(BaseModel):
     invalidators: List[ScenarioInvalidator] = Field(default_factory=list, description="Invalidadores del escenario")
     confidence: float = Field(..., ge=0.0, le=1.0, description="Nivel de confianza (0.0-1.0)")
     timeframe: Optional[str] = Field(None, description="Horizonte temporal del escenario")
+    market_impact: Optional[str] = Field(None, description="Impacto esperado en el mercado (breve descripción)")
+    suggested_actions: List[str] = Field(default_factory=list, description="Acciones sugeridas (posicionamiento, hedges, etc.)")
+    triggers: List[str] = Field(default_factory=list, description="Condiciones trigger o eventos a monitorear (ej: FOMC statement, CPI release)")
 
 
 class PortfolioAssetMapping(BaseModel):

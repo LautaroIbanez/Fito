@@ -17,6 +17,8 @@ interface SynthesisData {
     name?: string
     sensitivity: number
     confidence: number
+    impact_description?: string
+    asset_type?: string
   }>
   scenarios: ScenarioData[]
   generatedAt: string
@@ -476,83 +478,29 @@ export default function ProactiveAssistant({ onUpdate, autoLoad = true, onGenera
         </div>
       )}
 
-      {/* Síntesis generada */}
+      {/* Síntesis generada - Solo mostrar estado, no contenido duplicado */}
+      {/* El contenido se muestra en los widgets de HoyView para evitar duplicación */}
       {displaySynthesis && !isLoading && (
         <div className="assistant-content">
-          {/* Resumen ejecutivo */}
-          <section className="synthesis-section summary">
-            <h3>📊 Resumen Ejecutivo</h3>
-            {displaySynthesis.summary ? (
-              <div className="summary-content">
-                {displaySynthesis.summary.split('\n').slice(0, 4).map((p, idx) => (
-                  p.trim() && <p key={idx}>{p}</p>
-                ))}
+          {/* Indicador de síntesis generada exitosamente */}
+          <div className="synthesis-status">
+            <div className="status-icon">✅</div>
+            <div className="status-content">
+              <h3>Síntesis Generada Exitosamente</h3>
+              <p>Los datos se han procesado y están disponibles en los widgets del dashboard.</p>
+              <div className="status-details">
+                <span className="detail-item">
+                  📊 Resumen: {displaySynthesis.summary ? 'Disponible' : 'No disponible'}
+                </span>
+                <span className="detail-item">
+                  🔮 Escenarios: {displaySynthesis.scenarios.length} driver(s) identificado(s)
+                </span>
+                <span className="detail-item">
+                  🎯 Activos: {displaySynthesis.topAssets.length} activo(s) afectado(s)
+                </span>
               </div>
-            ) : (
-              <p className="empty-state">Resumen no disponible</p>
-            )}
-          </section>
-
-          {/* Por qué importa */}
-          {displaySynthesis.whyItMatters && (
-            <section className="synthesis-section why-matters">
-              <h3>💡 Por qué importa</h3>
-              <div className="why-content">
-                {displaySynthesis.whyItMatters.split('\n').map((p, idx) => (
-                  p.trim() && <p key={idx}>{p}</p>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Activos expuestos */}
-          {displaySynthesis.topAssets.length > 0 && (
-            <section className="synthesis-section exposed-assets">
-              <h3>🎯 Activos Expuestos</h3>
-              <div className="assets-grid">
-                {displaySynthesis.topAssets.map((asset, idx) => (
-                  <div key={asset.identifier} className="exposed-asset-card">
-                    <div className="asset-rank">#{idx + 1}</div>
-                    <div className="asset-details">
-                      <strong>{asset.name || asset.identifier}</strong>
-                      <div className="asset-metrics">
-                        <span className={`sensitivity ${asset.sensitivity > 0 ? 'positive' : 'negative'}`}>
-                          {asset.sensitivity > 0 ? '📈' : '📉'} {Math.abs(asset.sensitivity * 100).toFixed(0)}%
-                        </span>
-                        <span className="confidence">Confianza: {(asset.confidence * 100).toFixed(0)}%</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Escenarios conectados */}
-          {displaySynthesis.scenarios.length > 0 && (
-            <section className="synthesis-section scenarios">
-              <h3>🔮 Escenarios Conectados</h3>
-              <div className="scenarios-grid">
-                {displaySynthesis.scenarios.slice(0, 2).map((scenario, idx) => (
-                  <div key={idx} className="scenario-card">
-                    <h4>{scenario.driver}</h4>
-                    <p className="scenario-description">{scenario.driver_description}</p>
-                    <div className="scenario-types-mini">
-                      {scenario.scenarios.base && (
-                        <span className="scenario-badge base">Base: {scenario.scenarios.base.title}</span>
-                      )}
-                      {scenario.scenarios.risk && (
-                        <span className="scenario-badge risk">Riesgo: {scenario.scenarios.risk.title}</span>
-                      )}
-                      {scenario.scenarios.opportunity && (
-                        <span className="scenario-badge opportunity">Oportunidad: {scenario.scenarios.opportunity.title}</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
+            </div>
+          </div>
 
           {/* Timestamp */}
           <div className="synthesis-footer">
@@ -568,3 +516,4 @@ export default function ProactiveAssistant({ onUpdate, autoLoad = true, onGenera
     </div>
   )
 }
+

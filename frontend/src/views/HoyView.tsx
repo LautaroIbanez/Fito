@@ -2,15 +2,41 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { newsApi, portfolioApi, scenariosApi, ScenarioData } from '../services/api'
 import ProactiveAssistant from '../components/ProactiveAssistant'
 import { diagnostics } from '../utils/diagnostics'
+import ScenarioInsightCard from '../components/ScenarioInsightCard'
+import SensitiveAssetCard from '../components/SensitiveAssetCard'
 import './HoyView.css'
 
 interface ScenarioData {
   driver: string
   driver_description: string
   scenarios: {
-    base?: { title: string; description: string; confidence: number }
-    risk?: { title: string; description: string; confidence: number }
-    opportunity?: { title: string; description: string; confidence: number }
+    base?: {
+      title: string
+      description: string
+      confidence: number
+      assumptions?: Array<{ description: string; probability?: number; timeframe?: string }>
+      risks?: Array<{ description: string; severity?: string; mitigation?: string }>
+      invalidators?: Array<{ condition: string; description: string }>
+      timeframe?: string
+    }
+    risk?: {
+      title: string
+      description: string
+      confidence: number
+      assumptions?: Array<{ description: string; probability?: number; timeframe?: string }>
+      risks?: Array<{ description: string; severity?: string; mitigation?: string }>
+      invalidators?: Array<{ condition: string; description: string }>
+      timeframe?: string
+    }
+    opportunity?: {
+      title: string
+      description: string
+      confidence: number
+      assumptions?: Array<{ description: string; probability?: number; timeframe?: string }>
+      risks?: Array<{ description: string; severity?: string; mitigation?: string }>
+      invalidators?: Array<{ condition: string; description: string }>
+      timeframe?: string
+    }
   }
   portfolio_mappings: Array<{
     asset_type: string
@@ -27,38 +53,84 @@ interface HoyViewProps {
 }
 
 // Función para sintetizar resumen en formato de hints/bullets
+/**
+ * Sintetiza el resumen en hints concisos pero completos (3-5 bullets de 1-2 oraciones cada uno)
+ * Mejorado para evitar truncamiento y mostrar información completa
+ */
 function synthesizeSummaryHints(summary: string): string[] {
   if (!summary || !summary.trim()) {
     return []
   }
   
-  // Dividir por párrafos y oraciones
+  // Dividir por párrafos
   const paragraphs = summary.split('\n').filter(p => p.trim())
   const hints: string[] = []
   
-  for (const paragraph of paragraphs.slice(0, 5)) { // Limitar a primeros 5 párrafos
-    // Dividir párrafo en oraciones
-    const sentences = paragraph.split(/[.!?]+/).filter(s => s.trim().length > 20)
+  // Procesar párrafos para extraer información completa
+  for (const paragraph of paragraphs) {
+    if (hints.length >= 5) break // Máximo 5 hints para mejor información
     
-    for (const sentence of sentences.slice(0, 2)) { // Máximo 2 oraciones por párrafo
-      const trimmed = sentence.trim()
-      if (trimmed.length > 0 && trimmed.length < 150) { // Filtrar oraciones muy largas
-        hints.push(trimmed)
-        if (hints.length >= 3) break // Máximo 3 hints
-      }
+    const trimmedParagraph = paragraph.trim()
+    if (!trimmedParagraph) continue
+    
+    // Si el párrafo es corto y completo (< 200 chars), usarlo como hint completo
+    if (trimmedParagraph.length < 200 && trimmedParagraph.length > 30) {
+      hints.push(trimmedParagraph)
+      continue
     }
     
-    if (hints.length >= 3) break
+    // Para párrafos largos, dividir en oraciones completas
+    // Usar regex más robusto que preserve la puntuación
+    const sentences = trimmedParagraph
+      .split(/(?<=[.!?])\s+/)
+      .filter(s => s.trim().length > 20)
+      .map(s => s.trim())
+    
+    // Agregar oraciones completas (no truncadas)
+    for (const sentence of sentences) {
+      if (hints.length >= 5) break
+      
+      // Aceptar oraciones de 20 a 250 caracteres (más permisivo)
+      if (sentence.length >= 20 && sentence.length <= 250) {
+        hints.push(sentence)
+      } else if (sentence.length > 250) {
+        // Si es muy larga, dividirla en partes más pequeñas pero completas
+        // Buscar puntos de corte naturales (comas, puntos y comas)
+        const parts = sentence.split(/(?<=[,;])\s+/).filter(p => p.trim().length > 30)
+        for (const part of parts.slice(0, 2)) { // Máximo 2 partes por oración muy larga
+          if (hints.length >= 5) break
+          const trimmedPart = part.trim()
+          if (trimmedPart.length >= 30 && trimmedPart.length <= 200) {
+            hints.push(trimmedPart)
+          }
+        }
+      }
+    }
   }
   
   // Si no hay suficientes hints, crear algunos desde el resumen completo
   if (hints.length === 0 && summary.length > 50) {
-    // Dividir el resumen en chunks y tomar los primeros 3
-    const chunks = summary.split(/[.!?]+/).filter(s => s.trim().length > 30 && s.trim().length < 120)
-    return chunks.slice(0, 3).map(c => c.trim())
+    // Dividir el resumen en oraciones completas
+    const allSentences = summary
+      .split(/(?<=[.!?])\s+/)
+      .filter(s => {
+        const trimmed = s.trim()
+        return trimmed.length >= 30 && trimmed.length <= 200
+      })
+      .map(s => s.trim())
+    
+    return allSentences.slice(0, 5) // Hasta 5 hints
   }
   
-  return hints
+  // Asegurar que todos los hints terminen con puntuación adecuada
+  return hints.map(hint => {
+    const trimmed = hint.trim()
+    // Si no termina con puntuación, agregar punto
+    if (trimmed && !/[.!?]$/.test(trimmed)) {
+      return trimmed + '.'
+    }
+    return trimmed
+  }).filter(h => h.length > 0)
 }
 
 export default function HoyView({ onAddNews, onManagePortfolio }: HoyViewProps) {
@@ -103,6 +175,8 @@ export default function HoyView({ onAddNews, onManagePortfolio }: HoyViewProps) 
     name?: string
     sensitivity: number
     confidence: number
+    impact_description?: string
+    asset_type?: string
   }>>([])
   const [scenarios, setScenarios] = useState<ScenarioData[]>([])
   
@@ -253,28 +327,50 @@ export default function HoyView({ onAddNews, onManagePortfolio }: HoyViewProps) 
         setScenarios(scenariosData.value.drivers || [])
         
         // Extraer top 3 activos más sensibles
-        const allMappings = (scenariosData.value.drivers || []).flatMap(s => s.portfolio_mappings)
+        const allMappings = (scenariosData.value.drivers || []).flatMap(s => s.portfolio_mappings || [])
         const uniqueAssets = new Map<string, {
           identifier: string
           name?: string
           sensitivity: number
           confidence: number
+          impact_description?: string
+          asset_type?: string
         }>()
         
         allMappings.forEach(m => {
           const key = m.identifier
-          if (!uniqueAssets.has(key) || uniqueAssets.get(key)!.confidence < m.confidence) {
+          // Mantener el mapeo con mayor confianza, o si hay empate, mayor sensibilidad absoluta
+          const existing = uniqueAssets.get(key)
+          if (!existing || 
+              m.confidence > existing.confidence ||
+              (m.confidence === existing.confidence && Math.abs(m.sensitivity) > Math.abs(existing.sensitivity))) {
             uniqueAssets.set(key, {
               identifier: m.identifier,
               name: m.name,
               sensitivity: m.sensitivity,
-              confidence: m.confidence
+              confidence: m.confidence,
+              impact_description: m.impact_description,
+              asset_type: m.asset_type
             })
           }
         })
         
+        // Ordenar: 1) confianza descendente, 2) sensibilidad absoluta descendente, 3) ticker alfabético
         const sortedAssets = Array.from(uniqueAssets.values())
-          .sort((a, b) => Math.abs(b.sensitivity) - Math.abs(a.sensitivity))
+          .sort((a, b) => {
+            // Primero por confianza (descendente)
+            if (b.confidence !== a.confidence) {
+              return b.confidence - a.confidence
+            }
+            // Luego por sensibilidad absoluta (descendente)
+            const absSensA = Math.abs(a.sensitivity)
+            const absSensB = Math.abs(b.sensitivity)
+            if (absSensB !== absSensA) {
+              return absSensB - absSensA
+            }
+            // Finalmente por ticker alfabético (ascendente) para determinismo
+            return a.identifier.localeCompare(b.identifier)
+          })
           .slice(0, 3)
         
         setTopSensitiveAssets(sortedAssets)
@@ -422,7 +518,7 @@ export default function HoyView({ onAddNews, onManagePortfolio }: HoyViewProps) 
       <div className="hoy-blocks-grid">
         {/* Qué pasó hoy */}
         <section className="hoy-block que-paso-hoy">
-          <h2>📰 Qué pasó hoy</h2>
+          <h2>📰 Qué Pasó Hoy</h2>
           {summaryHints.length > 0 ? (
             <div className="summary-hints">
               <ul className="hints-list">
@@ -432,10 +528,10 @@ export default function HoyView({ onAddNews, onManagePortfolio }: HoyViewProps) 
               </ul>
             </div>
           ) : situationSummary ? (
-            // Fallback: si no hay hints sintetizados, mostrar primeros párrafos
+            // Fallback: si no hay hints sintetizados, mostrar resumen completo
             <div className="summary-text">
-              {situationSummary.split('\n').slice(0, 3).map((p, idx) => (
-                p.trim() && <p key={idx}>{p}</p>
+              {situationSummary.split('\n').filter(p => p.trim()).map((p, idx) => (
+                <p key={idx}>{p.trim()}</p>
               ))}
             </div>
           ) : (
@@ -459,20 +555,15 @@ export default function HoyView({ onAddNews, onManagePortfolio }: HoyViewProps) 
 
         {/* Top 3 activos sensibles */}
         <section className="hoy-block top-activos">
-          <h2>🎯 Top 3 activos sensibles</h2>
+          <h2>🎯 Top 3 Activos Sensibles</h2>
           {topSensitiveAssets.length > 0 ? (
-            <div className="assets-list">
+            <div className="assets-list" role="list" aria-label="Top 3 activos sensibles ordenados por confianza">
               {topSensitiveAssets.map((asset, idx) => (
-                <div key={asset.identifier} className="asset-item">
-                  <span className="asset-rank">#{idx + 1}</span>
-                  <div className="asset-info">
-                    <strong>{asset.name || asset.identifier}</strong>
-                    <span className={`sensitivity ${asset.sensitivity > 0 ? 'positive' : 'negative'}`}>
-                      {asset.sensitivity > 0 ? '📈' : '📉'} {Math.abs(asset.sensitivity * 100).toFixed(0)}%
-                    </span>
-                  </div>
-                  <span className="confidence">Confianza: {(asset.confidence * 100).toFixed(0)}%</span>
-                </div>
+                <SensitiveAssetCard
+                  key={asset.identifier}
+                  asset={asset}
+                  rank={idx + 1}
+                />
               ))}
             </div>
           ) : (
@@ -524,7 +615,7 @@ export default function HoyView({ onAddNews, onManagePortfolio }: HoyViewProps) 
 
       {/* Acciones rápidas */}
       <section className="hoy-block acciones-rapidas">
-        <h2>⚡ Acciones rápidas</h2>
+          <h2>⚡ Acciones Rápidas</h2>
         <div className="actions-grid">
           <button onClick={onAddNews} className="action-button">
             ➕ Agregar noticia
@@ -540,3 +631,4 @@ export default function HoyView({ onAddNews, onManagePortfolio }: HoyViewProps) 
     </div>
   )
 }
+

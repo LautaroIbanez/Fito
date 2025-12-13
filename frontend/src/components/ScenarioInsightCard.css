@@ -1,0 +1,327 @@
+/* Tarjeta de insight de escenario mejorada */
+.scenario-insight-card {
+  padding: var(--spacing-4);
+  border-radius: var(--radius-md);
+  border: 2px solid;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  min-height: 200px;
+  max-height: 600px;
+  overflow-y: auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.scenario-insight-card.base {
+  background: var(--color-info-bg);
+  border-color: var(--color-info);
+}
+
+.scenario-insight-card.risk {
+  background: var(--color-error-bg);
+  border-color: var(--color-error-border);
+}
+
+.scenario-insight-card.opportunity {
+  background: var(--color-green-50);
+  border-color: var(--color-green-200);
+}
+
+/* Header */
+.scenario-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-2);
+  padding-bottom: var(--spacing-2);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.scenario-type-label {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+  margin: 0;
+  color: #1a1a1a;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.confidence-badge {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  padding: var(--spacing-1) var(--spacing-2);
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: var(--radius-sm);
+  color: #333333;
+}
+
+/* Key Takeaway - Prominente */
+.key-takeaway {
+  display: flex;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3);
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: var(--radius-md);
+  border-left: 4px solid;
+  margin-bottom: var(--spacing-2);
+}
+
+.scenario-insight-card.base .key-takeaway {
+  border-left-color: var(--color-info);
+}
+
+.scenario-insight-card.risk .key-takeaway {
+  border-left-color: var(--color-error-border);
+}
+
+.scenario-insight-card.opportunity .key-takeaway {
+  border-left-color: var(--color-green-600);
+}
+
+.takeaway-icon {
+  font-size: var(--font-size-lg);
+  flex-shrink: 0;
+}
+
+.takeaway-text {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: #1a1a1a;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Secciones de insight */
+.insight-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.section-heading {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  color: #1a1a1a;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.subsection {
+  margin-top: var(--spacing-2);
+}
+
+.subsection-heading {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: #333333;
+  margin: 0 0 var(--spacing-1) 0;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* Bullets */
+.insight-bullets {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.bullet-item {
+  font-size: var(--font-size-sm);
+  color: #333333;
+  line-height: 1.5;
+  padding-left: var(--spacing-4);
+  position: relative;
+}
+
+.bullet-item::before {
+  content: '•';
+  position: absolute;
+  left: var(--spacing-2);
+  font-weight: var(--font-weight-bold);
+  color: #1a1a1a;
+  font-size: var(--font-size-base);
+}
+
+.bullet-meta {
+  font-size: var(--font-size-xs);
+  color: #1a1a1a;
+  font-style: italic;
+}
+
+.bullet-meta.severity-high {
+  color: var(--color-error);
+  font-weight: var(--font-weight-semibold);
+}
+
+.bullet-meta.severity-medium {
+  color: #f59e0b;
+  font-weight: var(--font-weight-semibold);
+}
+
+.bullet-meta.severity-low {
+  color: #1a1a1a;
+}
+
+.bullet-note {
+  font-size: var(--font-size-xs);
+  color: #1a1a1a;
+  font-style: italic;
+  margin-top: var(--spacing-1);
+  padding-left: var(--spacing-2);
+  border-left: 2px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Timeframe */
+.timeframe-info {
+  display: flex;
+  gap: var(--spacing-2);
+  align-items: center;
+  padding: var(--spacing-2);
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--spacing-2);
+}
+
+.timeframe-label {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: #1a1a1a;
+  text-transform: uppercase;
+}
+
+.timeframe-value {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: #1a1a1a;
+}
+
+/* Market Impact */
+.market-impact {
+  margin-top: var(--spacing-2);
+}
+
+.impact-description {
+  font-size: var(--font-size-sm);
+  color: #333333;
+  line-height: 1.5;
+  margin: 0;
+  padding: var(--spacing-2);
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid;
+}
+
+.scenario-insight-card.base .impact-description {
+  border-left-color: var(--color-info);
+}
+
+.scenario-insight-card.risk .impact-description {
+  border-left-color: var(--color-error-border);
+}
+
+.scenario-insight-card.opportunity .impact-description {
+  border-left-color: var(--color-green-600);
+}
+
+/* Suggested Actions */
+.suggested-actions {
+  margin-top: var(--spacing-2);
+}
+
+.insight-bullets.compact {
+  gap: var(--spacing-1);
+}
+
+.action-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-1);
+  padding: var(--spacing-1) 0;
+}
+
+.action-icon {
+  font-size: var(--font-size-sm);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* Triggers */
+.triggers {
+  margin-top: var(--spacing-2);
+}
+
+.trigger-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-1);
+  padding: var(--spacing-1) 0;
+}
+
+.trigger-icon {
+  font-size: var(--font-size-sm);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .scenario-insight-card {
+    padding: var(--spacing-3);
+    min-height: auto;
+  }
+  
+  .scenario-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-1);
+  }
+  
+  .key-takeaway {
+    flex-direction: column;
+    gap: var(--spacing-1);
+  }
+  
+  .takeaway-text {
+    font-size: var(--font-size-sm);
+  }
+  
+  .bullet-item {
+    font-size: var(--font-size-xs);
+    padding-left: var(--spacing-3);
+  }
+  
+  .section-heading,
+  .subsection-heading {
+    font-size: 10px;
+  }
+  
+  .timeframe-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-1);
+  }
+}
+
+@media (max-width: 480px) {
+  .scenario-insight-card {
+    padding: var(--spacing-2);
+  }
+  
+  .key-takeaway {
+    padding: var(--spacing-2);
+  }
+  
+  .bullet-item {
+    padding-left: var(--spacing-2);
+    font-size: 11px;
+  }
+}
+

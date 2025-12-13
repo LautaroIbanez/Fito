@@ -144,6 +144,9 @@ Para cada escenario, proporciona:
 - invalidators: Lista de condiciones que invalidarían el escenario (mínimo 1, máximo 3)
 - confidence: Nivel de confianza (0.0-1.0)
 - timeframe: Horizonte temporal estimado (ej: "3-6 meses", "1-2 semanas")
+- market_impact: Impacto esperado en el mercado (1-2 oraciones breves, ej: "Caída del 5-10% en tech stocks")
+- suggested_actions: Lista de acciones sugeridas (2-3 items, ej: ["Reducir exposición a tech", "Aumentar hedges con puts", "Monitorear indicadores técnicos"])
+- triggers: Lista de eventos o condiciones trigger a monitorear (2-3 items, ej: ["FOMC statement del 15/03", "CPI release de marzo", "Earnings de AAPL"])
 
 Responde en formato JSON con esta estructura:
 {{
@@ -160,7 +163,10 @@ Responde en formato JSON con esta estructura:
             {{"condition": "Condición que invalida", "description": "Por qué invalida"}}
         ],
         "confidence": 0.75,
-        "timeframe": "3-6 meses"
+        "timeframe": "3-6 meses",
+        "market_impact": "Impacto esperado en el mercado...",
+        "suggested_actions": ["Acción 1", "Acción 2"],
+        "triggers": ["Evento 1", "Evento 2"]
     }},
     "risk": {{
         "title": "Título del escenario de riesgo",
@@ -169,7 +175,10 @@ Responde en formato JSON con esta estructura:
         "risks": [...],
         "invalidators": [...],
         "confidence": 0.65,
-        "timeframe": "1-3 meses"
+        "timeframe": "1-3 meses",
+        "market_impact": "Impacto esperado en el mercado...",
+        "suggested_actions": ["Acción 1", "Acción 2"],
+        "triggers": ["Evento 1", "Evento 2"]
     }},
     "opportunity": {{
         "title": "Título del escenario de oportunidad",
@@ -229,6 +238,17 @@ Responde en formato JSON con esta estructura:
                         description=inv_data.get("description", "")
                     ))
                 
+                # Procesar market_impact, suggested_actions, triggers
+                market_impact = scenario_data.get("market_impact")
+                suggested_actions = scenario_data.get("suggested_actions", [])
+                triggers = scenario_data.get("triggers", [])
+                
+                # Validar que suggested_actions y triggers sean listas
+                if not isinstance(suggested_actions, list):
+                    suggested_actions = []
+                if not isinstance(triggers, list):
+                    triggers = []
+                
                 # Crear Scenario
                 scenario = Scenario(
                     scenario_type=scenario_type,
@@ -238,7 +258,10 @@ Responde en formato JSON con esta estructura:
                     risks=risks,
                     invalidators=invalidators,
                     confidence=max(0.0, min(1.0, scenario_data.get("confidence", 0.5))),
-                    timeframe=scenario_data.get("timeframe")
+                    timeframe=scenario_data.get("timeframe"),
+                    market_impact=market_impact,
+                    suggested_actions=suggested_actions,
+                    triggers=triggers
                 )
                 
                 scenarios[scenario_type] = scenario
@@ -248,3 +271,4 @@ Responde en formato JSON con esta estructura:
                 continue
         
         return scenarios
+

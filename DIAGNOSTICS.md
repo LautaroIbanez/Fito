@@ -209,3 +209,4 @@ Después de implementar este sistema, deberías ver en la consola:
 - Puedes habilitarlo en producción con: `localStorage.setItem('enableDiagnostics', 'true')`
 - Los logs usan `performance.now()` para medir tiempos precisos
 - El sistema expone `window.diagnostics` para acceso desde la consola
+

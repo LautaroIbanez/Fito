@@ -37,3 +37,4 @@ export default function Navigation({ currentView, onViewChange }: NavigationProp
     </nav>
   )
 }
+

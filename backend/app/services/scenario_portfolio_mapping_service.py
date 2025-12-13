@@ -258,3 +258,4 @@ Responde en formato JSON con esta estructura:
                 continue
         
         return mappings
+

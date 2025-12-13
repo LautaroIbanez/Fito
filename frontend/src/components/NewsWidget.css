@@ -168,7 +168,7 @@
 }
 
 .tile-title.no-title {
-  color: #666;
+  color: #1a1a1a;
   font-style: italic;
   font-weight: 400;
 }
@@ -189,7 +189,7 @@
   align-items: center;
   flex-wrap: wrap;
   font-size: 0.8rem;
-  color: #4a4a4a;
+  color: #1a1a1a;
 }
 
 .tile-source {
@@ -198,7 +198,7 @@
 }
 
 .tile-time {
-  color: #666;
+  color: #1a1a1a;
 }
 
 .tile-score {
@@ -239,7 +239,7 @@
 .tag-label {
   font-size: 0.75rem;
   font-weight: 600;
-  color: #666;
+  color: #1a1a1a;
   text-transform: uppercase;
 }
 
@@ -275,7 +275,7 @@
   font-size: 0.7rem;
   font-weight: 500;
   background: #f0f0f0;
-  color: #555;
+  color: #1a1a1a;
 }
 
 .expand-button {
@@ -298,19 +298,19 @@
 .empty-state {
   text-align: center;
   padding: 60px 20px;
-  color: #666;
+  color: #1a1a1a;
 }
 
 .empty-state p {
   font-size: 1rem;
   margin: 0 0 8px 0;
-  color: #666;
+  color: #1a1a1a;
 }
 
 .empty-state .hint {
   font-size: 0.9rem;
   margin-top: 8px;
-  color: #999;
+  color: #1a1a1a;
 }
 
 .error-message {
@@ -388,7 +388,7 @@
 
 .char-count {
   font-size: 0.75rem;
-  color: #666;
+  color: #1a1a1a;
   text-align: right;
 }
 
@@ -434,7 +434,7 @@
 
 .cancel-button {
   background: #e0e0e0;
-  color: #555;
+  color: #1a1a1a;
 }
 
 .cancel-button:hover:not(:disabled) {
@@ -472,13 +472,13 @@
 .loading {
   text-align: center;
   padding: 60px 20px;
-  color: #666;
+  color: #1a1a1a;
 }
 
 .loading p {
   margin: 0;
   font-size: 0.95rem;
-  color: #666;
+  color: #1a1a1a;
 }
 
 @media (max-width: 768px) {
