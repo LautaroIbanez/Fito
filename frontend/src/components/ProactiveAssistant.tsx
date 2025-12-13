@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { newsApi, scenariosApi, ScenarioData } from '../services/api'
+import { diagnostics } from '../utils/diagnostics'
 import './ProactiveAssistant.css'
 
 interface ProactiveAssistantProps {
@@ -106,6 +107,14 @@ export default function ProactiveAssistant({ onUpdate, autoLoad = true, onGenera
 
   const generateSynthesis = async (isManual = false) => {
     try {
+      console.log('[ProactiveAssistant] Iniciando generateSynthesis', { isManual, timestamp: new Date().toISOString() })
+      diagnostics.logComponentState('ProactiveAssistant.generateSynthesis', { 
+        isManual, 
+        isLoading, 
+        isRecalculating,
+        hasSynthesis: !!synthesis
+      })
+      
       if (isManual) {
         setIsRecalculating(true)
       } else {

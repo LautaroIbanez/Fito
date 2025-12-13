@@ -1,6 +1,40 @@
 import axios from 'axios'
+import { diagnostics } from '../utils/diagnostics'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001/api'
+
+// Configurar interceptores de axios para diagnóstico
+axios.interceptors.request.use(
+  (config) => {
+    const callId = diagnostics.startHttpCall(config.method?.toUpperCase() || 'GET', config.url || '')
+    // Guardar el ID en la configuración para usarlo en la respuesta
+    ;(config as any).__diagnosticsId = callId
+    return config
+  },
+  (error) => {
+    console.error('[API] Error en interceptor de request:', error)
+    return Promise.reject(error)
+  }
+)
+
+axios.interceptors.response.use(
+  (response) => {
+    const callId = (response.config as any).__diagnosticsId
+    if (callId) {
+      diagnostics.endHttpCall(callId, response.status)
+    }
+    return response
+  },
+  (error) => {
+    const callId = (error.config as any)?.__diagnosticsId
+    if (callId) {
+      const status = error.response?.status
+      const errorMessage = error.response?.data?.detail || error.message || 'Error desconocido'
+      diagnostics.endHttpCall(callId, status, errorMessage)
+    }
+    return Promise.reject(error)
+  }
+)
 
 export interface NewsItem {
   id: number

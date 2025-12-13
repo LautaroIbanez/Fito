@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { newsApi, portfolioApi, scenariosApi, ScenarioData } from '../services/api'
 import ProactiveAssistant from '../components/ProactiveAssistant'
+import { diagnostics } from '../utils/diagnostics'
 import './HoyView.css'
 
 interface ScenarioData {
@@ -65,6 +66,33 @@ export default function HoyView({ onAddNews, onManagePortfolio }: HoyViewProps) 
   // Solo se activa cuando el usuario solicita datos de respaldo manualmente
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  
+  // Diagnóstico: Log del estado inicial del componente
+  useEffect(() => {
+    diagnostics.logComponentState('HoyView', {
+      isLoading,
+      hasSynthesis,
+      isGenerating,
+      scenariosCount: scenarios.length,
+      hasSummary: !!situationSummary,
+      hasHints: summaryHints.length > 0
+    })
+    
+    // Imprimir resumen de llamadas HTTP cada 10 segundos si hay llamadas pendientes
+    const interval = setInterval(() => {
+      const pending = diagnostics.getPendingCalls()
+      if (pending.length > 0) {
+        console.warn(
+          `%c[DIAGNOSTICS] ⚠️ Hay ${pending.length} llamada(s) HTTP pendiente(s) después de ${Math.floor((Date.now() - performance.timeOrigin) / 1000)}s desde la carga`,
+          'color: #f59e0b; font-weight: bold; font-size: 14px'
+        )
+        diagnostics.printSummary()
+      }
+    }, 10000)
+    
+    return () => clearInterval(interval)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   
   // Datos principales
   const [situationSummary, setSituationSummary] = useState<string | null>(null)
@@ -179,6 +207,14 @@ export default function HoyView({ onAddNews, onManagePortfolio }: HoyViewProps) 
     }
     
     try {
+      console.log('[HoyView] Iniciando loadHoyData', { force, timestamp: new Date().toISOString() })
+      diagnostics.logComponentState('HoyView.loadHoyData', { 
+        force, 
+        isGenerating, 
+        hasSynthesis,
+        assistantDataReceived: assistantDataReceivedRef.current
+      })
+      
       setIsLoading(true)
       setError(null)
       hasLoadedRef.current = true // Marcar que ya cargamos datos de respaldo
@@ -254,9 +290,25 @@ export default function HoyView({ onAddNews, onManagePortfolio }: HoyViewProps) 
 
   // Ahora sí podemos hacer returns condicionales después de todos los hooks
   if (isLoading) {
+    // Diagnóstico: Identificar qué está bloqueando el render
+    const pendingCalls = diagnostics.getPendingCalls()
+    if (pendingCalls.length > 0) {
+      diagnostics.logRenderBlock('HoyView', 'isLoading=true', {
+        pendingCalls: pendingCalls.map(c => ({ url: c.url, elapsed: `${c.elapsed.toFixed(0)}ms` })),
+        isLoading,
+        isGenerating,
+        hasSynthesis
+      })
+    }
+    
     return (
       <div className="hoy-view loading">
         <div className="loading-spinner">⏳ Cargando...</div>
+        {pendingCalls.length > 0 && (
+          <div style={{ marginTop: '10px', fontSize: '12px', color: '#666' }}>
+            Esperando {pendingCalls.length} llamada(s) HTTP...
+          </div>
+        )}
       </div>
     )
   }
