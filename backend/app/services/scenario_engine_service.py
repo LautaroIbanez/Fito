@@ -2,9 +2,9 @@
 import logging
 from typing import List, Dict, Optional
 from datetime import datetime
-from app.services.scenario_driver_service import ScenarioDriverService
-from app.services.scenario_generation_service import ScenarioGenerationService
-from app.services.scenario_portfolio_mapping_service import ScenarioPortfolioMappingService
+from app.services.driver_detector import DriverDetector
+from app.services.template_scenario_generator import TemplateScenarioGenerator
+from app.services.rule_based_portfolio_mapper import RuleBasedPortfolioMapper
 from app.models import (
     DriverScenarioResponse,
     ScenarioEngineResponse
@@ -14,13 +14,31 @@ logger = logging.getLogger(__name__)
 
 
 class ScenarioEngineService:
-    """Servicio principal del motor de escenarios."""
+    """Servicio principal del motor de escenarios (usando reglas y plantillas, sin LLM)."""
     
-    def __init__(self):
-        """Inicializa los servicios del motor de escenarios."""
-        self.driver_service = ScenarioDriverService()
-        self.scenario_service = ScenarioGenerationService()
-        self.mapping_service = ScenarioPortfolioMappingService()
+    def __init__(self, use_rule_based: bool = True):
+        """
+        Inicializa los servicios del motor de escenarios.
+        
+        Args:
+            use_rule_based: Si True, usa servicios basados en reglas (sin LLM). Si False, usa OpenAI (legacy).
+        """
+        self.use_rule_based = use_rule_based
+        if use_rule_based:
+            self.driver_service = DriverDetector()
+            self.scenario_service = TemplateScenarioGenerator()
+            self.mapping_service = RuleBasedPortfolioMapper()
+            logger.info("ScenarioEngineService inicializado con servicios basados en reglas (sin LLM)")
+        else:
+            # Legacy: mantener compatibilidad con OpenAI
+            from app.services.scenario_driver_service import ScenarioDriverService
+            from app.services.scenario_generation_service import ScenarioGenerationService
+            from app.services.scenario_portfolio_mapping_service import ScenarioPortfolioMappingService
+            
+            self.driver_service = ScenarioDriverService()
+            self.scenario_service = ScenarioGenerationService()
+            self.mapping_service = ScenarioPortfolioMappingService()
+            logger.info("ScenarioEngineService inicializado con OpenAI (legacy)")
     
     def generate_scenarios(
         self,
@@ -48,9 +66,13 @@ class ScenarioEngineService:
         
         try:
             # Paso 1: Identificar drivers temáticos
-            logger.info(f"Iniciando generación de escenarios: {len(standardized_news_items)} noticias")
+            method_label = "reglas locales (sin LLM)" if self.use_rule_based else "openai (legacy)"
+            logger.info(f"[MOTOR LOCAL] Iniciando generación de escenarios: {len(standardized_news_items)} noticias (método: {method_label})")
             
-            drivers = self.driver_service.identify_drivers(standardized_news_items, max_drivers)
+            if self.use_rule_based:
+                drivers = self.driver_service.detect_drivers(standardized_news_items, max_drivers)
+            else:
+                drivers = self.driver_service.identify_drivers(standardized_news_items, max_drivers)
             
             if not drivers:
                 logger.warning("No se identificaron drivers temáticos")
@@ -105,9 +127,14 @@ class ScenarioEngineService:
                     portfolio_mappings = []
                     if include_portfolio_mapping and portfolio_items:
                         try:
-                            portfolio_mappings = self.mapping_service.map_scenarios_to_portfolio(
-                                driver, scenarios, portfolio_items
-                            )
+                            if self.use_rule_based:
+                                portfolio_mappings = self.mapping_service.map_scenarios_to_portfolio(
+                                    driver, scenarios, portfolio_items, related_news_items
+                                )
+                            else:
+                                portfolio_mappings = self.mapping_service.map_scenarios_to_portfolio(
+                                    driver, scenarios, portfolio_items
+                                )
                         except Exception as e:
                             logger.error(f"Error mapeando a cartera para driver '{driver.get('driver')}': {e}")
                             warnings.append(f"Driver '{driver.get('driver')}': error en mapeo a cartera")
@@ -142,7 +169,7 @@ class ScenarioEngineService:
             if missing_fields or warnings:
                 partial_results = True
             
-            logger.info(f"Generación de escenarios completada: {len(drivers_responses)} drivers generados")
+            logger.info(f"[MOTOR LOCAL] Generación de escenarios completada: {len(drivers_responses)} drivers generados (procesamiento local, sin llamadas HTTP externas)")
             
             return ScenarioEngineResponse(
                 drivers=drivers_responses,

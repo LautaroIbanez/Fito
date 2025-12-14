@@ -86,7 +86,7 @@ async def save_standardized_news(
     Los datos estandarizados se guardan en formato JSON para consumo uniforme por prompts posteriores.
     """
     try:
-        # Estandarizar la noticia usando OpenAI
+        # Estandarizar la noticia usando NLP local (sin LLM)
         preprocessing_service = NewsPreprocessingService()
         standardized_data = preprocessing_service.standardize_news(news_item.article_text)
         
@@ -383,13 +383,14 @@ async def get_situation_summary(
             batch_size=5  # 5 noticias por lote (configurable)
         )
         
-        # Log detallado de métricas
+        # Log detallado de métricas (motor local)
+        method = summary_result.get('method', 'extractive')
         logger.info(
-            f"Resumen de situación generado: {summary_result['news_count']} noticias totales, "
+            f"Resumen de situación generado (motor local - {method}): "
+            f"{summary_result['news_count']} noticias totales, "
             f"{summary_result['recent_news_count']} noticias recientes, "
             f"{summary_result['batches_processed']} lotes procesados, "
-            f"~{summary_result['total_prompt_tokens']} tokens de prompt estimados, "
-            f"{summary_result.get('tokens_used', 'N/A')} tokens totales usados"
+            f"~{summary_result.get('estimated_tokens', summary_result.get('total_prompt_tokens', 0))} tokens estimados (sin costos de API)"
         )
         
         return SituationSummaryResponse(**summary_result)

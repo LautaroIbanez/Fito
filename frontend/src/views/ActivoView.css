@@ -171,11 +171,72 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
+.details-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-5);
+  flex-wrap: wrap;
+  gap: var(--spacing-3);
+}
+
 .activo-details h2 {
   font-size: var(--font-size-xl);
   font-weight: var(--font-weight-bold);
-  margin-bottom: var(--spacing-5);
+  margin: 0;
   color: #1a1a1a;
+}
+
+.price-data-controls {
+  display: flex;
+  gap: var(--spacing-2);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.period-select {
+  padding: var(--spacing-2) var(--spacing-3);
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  background: white;
+  color: #1a1a1a;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.period-select:hover:not(:disabled) {
+  border-color: var(--color-green-600);
+}
+
+.period-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.update-price-button {
+  padding: var(--spacing-2) var(--spacing-4);
+  background: var(--color-green-600);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.update-price-button:hover:not(:disabled) {
+  background: var(--color-green-700);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.update-price-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .details-grid {
@@ -203,6 +264,12 @@
 .detail-value {
   font-size: var(--font-size-base);
   color: #1a1a1a;
+}
+
+.detail-value.price-current {
+  color: var(--color-green-700);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-lg);
 }
 
 .empty-state {
@@ -241,6 +308,92 @@
   cursor: pointer;
 }
 
+/* Estilos para sección de precio y gráfico */
+.price-error {
+  margin-top: var(--spacing-4);
+  padding: var(--spacing-4);
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
+  border-radius: var(--radius-md);
+  color: var(--color-error);
+}
+
+.price-error p {
+  margin: 0 0 var(--spacing-2) 0;
+  font-weight: var(--font-weight-semibold);
+}
+
+.retry-price-button {
+  padding: var(--spacing-2) var(--spacing-4);
+  background: var(--color-error);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.retry-price-button:hover {
+  background: #c62828;
+  transform: translateY(-1px);
+}
+
+.price-loading {
+  margin-top: var(--spacing-4);
+  padding: var(--spacing-6);
+  text-align: center;
+  background: var(--color-gray-50);
+  border-radius: var(--radius-md);
+}
+
+.price-loading .loading-spinner {
+  font-size: var(--font-size-lg);
+  color: #4a4a4a;
+}
+
+.price-chart-section {
+  margin-top: var(--spacing-5);
+  padding-top: var(--spacing-5);
+  border-top: 2px solid var(--color-gray-200);
+}
+
+.price-chart-section h3 {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  margin-bottom: var(--spacing-3);
+  color: #1a1a1a;
+}
+
+.price-data-info {
+  margin-top: var(--spacing-3);
+  padding: var(--spacing-2);
+  background: var(--color-gray-50);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  color: #4a4a4a;
+}
+
+.price-data-info p {
+  margin: 0;
+}
+
+.price-data-info strong {
+  color: #1a1a1a;
+  margin-right: var(--spacing-1);
+}
+
+.price-empty {
+  margin-top: var(--spacing-4);
+  padding: var(--spacing-4);
+  text-align: center;
+  background: var(--color-gray-50);
+  border-radius: var(--radius-md);
+  color: #666666;
+  font-style: italic;
+}
+
 @media (max-width: 1200px) {
   .activo-content {
     grid-template-columns: 1fr;
@@ -258,6 +411,21 @@
 @media (max-width: 768px) {
   .details-grid {
     grid-template-columns: 1fr;
+  }
+
+  .details-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .price-data-controls {
+    width: 100%;
+  }
+
+  .period-select,
+  .update-price-button {
+    flex: 1;
+    min-width: 0;
   }
 }
 

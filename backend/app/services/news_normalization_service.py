@@ -18,6 +18,9 @@ from app.config import (
     NORMALIZED_NEWS_REJECT_ON_CRITICAL_ERROR,
     NORMALIZED_NEWS_REQUIRE_TICKERS_OR_ENTITIES
 )
+from app.services.sentiment_service import get_sentiment_service
+from app.services.sector_service import get_sector_service
+from app.services.local_nlp import get_local_nlp_service
 
 logger = logging.getLogger(__name__)
 
@@ -85,13 +88,28 @@ class NewsNormalizationService:
         
         normalized["summary"] = summary
         
-        # 4. Sentiment (obligatorio)
+        # 4. Sentiment (obligatorio) - Usar servicio local sin LLM
         if standardized_data and standardized_data.sentiment:
             sentiment = standardized_data.sentiment.lower()
+            logger.debug(f"Sentimiento obtenido de datos estandarizados: {sentiment}")
         else:
-            # Intentar inferir del texto
-            sentiment = self._infer_sentiment(news_item.body)
-            errors.append("Sentiment inferido del texto (no estandarizado)")
+            # Usar servicio local de sentimiento (sin LLM)
+            try:
+                sentiment_service = get_sentiment_service()
+                sentiment_result = sentiment_service.analyze_sentiment(
+                    text=news_item.body,
+                    title=news_item.title
+                )
+                sentiment = sentiment_result["sentiment"]
+                logger.info(
+                    f"Sentimiento analizado localmente (sin LLM) para noticia ID {news_item.id}: "
+                    f"{sentiment} (confianza: {sentiment_result['confidence']:.3f}, "
+                    f"método: {sentiment_result['method']})"
+                )
+            except Exception as e:
+                logger.warning(f"Error analizando sentimiento localmente: {e}, usando 'neutral'")
+                sentiment = "neutral"
+                errors.append(f"Error analizando sentimiento: {e}, usando 'neutral'")
         
         if sentiment not in [s.lower() for s in NORMALIZED_NEWS_VALID_SENTIMENTS]:
             errors.append(f"Sentiment inválido: {sentiment}, usando 'neutral'")
@@ -112,12 +130,42 @@ class NewsNormalizationService:
         
         normalized["impact_score"] = round(impact_score, 3)
         
-        # 6. Tickers (opcional pero recomendado)
+        # 6. Tickers (opcional pero recomendado) - Usar extractor local
         tickers = self._extract_tickers(news_item, standardized_data)
+        
+        # Mejorar extracción de tickers usando NLP local
+        try:
+            nlp_service = get_local_nlp_service()
+            entity_extractor = nlp_service.entity_extractor
+            extracted_tickers = entity_extractor.extract_tickers(
+                f"{news_item.title or ''} {news_item.body}"
+            )
+            # Combinar tickers extraídos con los existentes
+            all_tickers = list(set(tickers + extracted_tickers))
+            tickers = all_tickers
+            logger.debug(f"Tickers extraídos localmente: {extracted_tickers}, total: {tickers}")
+        except Exception as e:
+            logger.warning(f"Error extrayendo tickers localmente: {e}, usando método básico")
+        
         normalized["tickers"] = tickers
         
-        # 7. Entities (opcional pero recomendado)
+        # 7. Entities (opcional pero recomendado) - Usar extractor local
         entities = self._extract_entities(news_item, standardized_data)
+        
+        # Mejorar extracción de entidades usando NLP local
+        try:
+            nlp_service = get_local_nlp_service()
+            entity_extractor = nlp_service.entity_extractor
+            extracted_entities = entity_extractor.extract_entities(
+                f"{news_item.title or ''} {news_item.body}"
+            )
+            # Combinar entidades: ORG y PERSON son las más relevantes
+            all_entities = list(set(entities + extracted_entities.get("ORG", []) + extracted_entities.get("PERSON", [])))
+            entities = all_entities
+            logger.debug(f"Entidades extraídas localmente: ORG={extracted_entities.get('ORG', [])}, PERSON={extracted_entities.get('PERSON', [])}, total: {entities}")
+        except Exception as e:
+            logger.warning(f"Error extrayendo entidades localmente: {e}, usando método básico")
+        
         normalized["entities"] = entities
         
         # Validar que haya tickers o entities si es requerido
@@ -127,7 +175,44 @@ class NewsNormalizationService:
         # 8. Campos opcionales
         normalized["title"] = news_item.title or (standardized_data.title if standardized_data else None)
         normalized["original_text"] = news_item.body
-        normalized["categories"] = self._extract_categories(news_item, standardized_data)
+        
+        # Clasificar sectores usando servicio local (sin LLM)
+        try:
+            sector_service = get_sector_service()
+            sector_result = sector_service.classify_sector(
+                text=news_item.body,
+                title=news_item.title
+            )
+            primary_sector = sector_result["primary_sector"]
+            
+            # Convertir sector a formato de categorías
+            if primary_sector:
+                # Mapear nombres de sectores a formato estándar
+                sector_mapping = {
+                    "tecnología": "Tecnología",
+                    "finanzas": "Finanzas",
+                    "energía": "Energía",
+                    "salud": "Salud",
+                    "consumo": "Consumo",
+                    "industria": "Industriales",
+                    "telecomunicaciones": "Telecomunicaciones",
+                    "bienes raíces": "Bienes Raíces"
+                }
+                mapped_sector = sector_mapping.get(primary_sector, primary_sector.capitalize())
+                normalized["categories"] = [mapped_sector]
+                
+                logger.info(
+                    f"Sector clasificado localmente (sin LLM) para noticia ID {news_item.id}: "
+                    f"{primary_sector} (confianza: {sector_result['confidence']:.3f}, "
+                    f"método: {sector_result['method']})"
+                )
+            else:
+                # Fallback al método anterior si no se encuentra sector
+                normalized["categories"] = self._extract_categories(news_item, standardized_data)
+                logger.debug(f"No se encontró sector principal, usando método de fallback")
+        except Exception as e:
+            logger.warning(f"Error clasificando sector localmente: {e}, usando método de fallback")
+            normalized["categories"] = self._extract_categories(news_item, standardized_data)
         normalized["metadata"] = {
             "original_news_id": news_item.id,
             "has_standardized_data": standardized_data is not None,
@@ -137,6 +222,17 @@ class NewsNormalizationService:
         return normalized, errors
     
     def _infer_sentiment(self, text: str) -> str:
+        """
+        Método legacy para inferir sentimiento (mantenido para compatibilidad).
+        Ahora usa SentimentService internamente.
+        """
+        try:
+            sentiment_service = get_sentiment_service()
+            result = sentiment_service.analyze_sentiment(text)
+            return result["sentiment"]
+        except Exception as e:
+            logger.warning(f"Error en _infer_sentiment: {e}, retornando 'neutral'")
+            return "neutral"
         """Infiere sentimiento del texto."""
         text_lower = text.lower()
         

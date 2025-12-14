@@ -15,7 +15,9 @@ from app.models import (
     PortfolioListResponse,
     AssetRecommendationsResponse,
     AllRecommendationsResponse,
-    TradingRecommendation
+    TradingRecommendation,
+    PriceDataResponse,
+    PriceDataPoint
 )
 from app.database import TradingRecommendation as TradingRecommendationDB
 from app.services.trading_recommendations_service import TradingRecommendationsService
@@ -23,6 +25,7 @@ from app.services.recommendation_audit_service import RecommendationAuditService
 from app.services.risk_service import RiskService
 from app.services.portfolio_insights_service import PortfolioInsightsService
 from app.services.portfolio_ranking_service import PortfolioRankingService
+from app.services.price_data_service import PriceDataService
 from sqlalchemy import and_, or_, desc, asc
 
 logger = logging.getLogger(__name__)
@@ -32,6 +35,7 @@ router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 recommendations_service = TradingRecommendationsService()
 audit_service = RecommendationAuditService()
 ranking_service = PortfolioRankingService()
+price_data_service = PriceDataService()
 
 
 @router.post("", response_model=PortfolioItemResponse, status_code=status.HTTP_201_CREATED)
@@ -708,5 +712,63 @@ async def get_price_history(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error interno al obtener historial de precios"
+        )
+
+
+@router.get("/{item_id}/price-data", response_model=PriceDataResponse)
+async def get_price_data(
+    item_id: int,
+    period: str = Query("1mo", description="Período de datos: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max"),
+    interval: str = Query("1d", description="Intervalo: 1m, 5m, 15m, 30m, 1h, 1d, 1wk, 1mo"),
+    db: Session = Depends(get_db)
+):
+    """
+    Obtiene datos de precio y volumen actualizados para un item de cartera.
+    Consulta Yahoo Finance API para obtener datos OHLCV.
+    """
+    try:
+        # Obtener el item de cartera
+        db_item = db.query(PortfolioItem).filter(PortfolioItem.id == item_id).first()
+        if not db_item:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Item de cartera con ID {item_id} no encontrado"
+            )
+        
+        # Verificar que tenga símbolo
+        if not db_item.symbol:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El item de cartera no tiene un símbolo configurado"
+            )
+        
+        # Formatear símbolo para Yahoo Finance
+        formatted_symbol = price_data_service.format_symbol_for_yahoo(
+            db_item.symbol, 
+            db_item.asset_type
+        )
+        
+        # Obtener datos de precio
+        price_data = await price_data_service.get_price_data(
+            symbol=formatted_symbol,
+            period=period,
+            interval=interval
+        )
+        
+        return PriceDataResponse(**price_data)
+        
+    except ValueError as e:
+        logger.error(f"Error de validación al obtener datos de precio para item {item_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error inesperado al obtener datos de precio para item {item_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error interno al obtener datos de precio: {str(e)}"
         )
 

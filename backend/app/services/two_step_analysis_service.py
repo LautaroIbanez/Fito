@@ -7,6 +7,9 @@ from openai import OpenAI
 
 from app.config import OPENAI_API_KEY, OPENAI_MODEL, OPENAI_TEMPERATURE
 from app.models import NewsItemResponse, PortfolioItemResponse
+from app.services.sentiment_service import get_sentiment_service
+from app.services.sector_service import get_sector_service
+from app.services.local_nlp import get_local_nlp_service
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +35,7 @@ class TwoStepAnalysisService:
         news_items: List[NewsItemResponse]
     ) -> List[Dict]:
         """
-        Paso 1: Normaliza un lote de noticias crudas.
+        Paso 1: Normaliza un lote de noticias crudas usando NLP local (sin LLM).
         
         Extrae: title, date, source, plain_bullets, tickers, geo_tags, 
         sector_tags, uncertainty, source_urls, duplication_notes.
@@ -43,120 +46,137 @@ class TwoStepAnalysisService:
         if not news_items:
             return []
         
-        # Construir lista de noticias crudas para el prompt
-        raw_news_list = []
+        logger.info(f"Normalizando {len(news_items)} noticias usando NLP local (sin LLM)")
+        
+        normalized_list = []
+        sentiment_service = get_sentiment_service()
+        sector_service = get_sector_service()
+        nlp_service = get_local_nlp_service()
+        
         for item in news_items:
-            raw_news_list.append({
-                "id": item.id,
-                "title": item.title or "Sin título",
-                "body": item.body,
-                "source": item.source or "Desconocida",
-                "created_at": item.created_at
-            })
-        
-        normalization_prompt = f"""You extract facts from raw news snippets. For each item, return JSON with: title, date, source, plain_bullets (array of 1-2 sentence factual bullets), tickers (with exchange suffix if known, e.g., AAPL.US, TSLA.US), geo_tags, sector_tags, uncertainty (true/false), source_urls ([] if none), and duplication_notes. No extra text.
-
-Validate URLs and drop clearly duplicated stories. Keep an uncertainty flag if details are missing.
-
-Input:
-{json.dumps(raw_news_list, ensure_ascii=False, indent=2)}
-
-IMPORTANT: Return a JSON object with a "items" key containing an array. Each element must correspond to an input item and include:
-- "id": original id from input
-- "title": extracted or cleaned title
-- "date": ISO date string or null
-- "source": source name or null
-- "plain_bullets": array of 1-2 sentence factual bullets (no prose)
-- "tickers": array of tickers with exchange suffix (e.g., ["AAPL.US", "TSLA.US"]) or empty array
-- "geo_tags": array of geographic tags (e.g., ["US", "Argentina"]) or empty array
-- "sector_tags": array of sector tags (e.g., ["TECH", "FINANCE"]) or empty array
-- "uncertainty": boolean (true if details are missing or unclear)
-- "source_urls": array of URLs or empty array
-- "duplication_notes": string describing if story is duplicate or empty string
-
-Return format:
-{{
-  "items": [
-    {{
-      "id": <original_id>,
-      "title": "extracted title",
-      "date": "2024-01-15T10:00:00Z" or null,
-      "source": "source name" or null,
-      "plain_bullets": ["bullet 1", "bullet 2"],
-      "tickers": ["AAPL.US", "TSLA.US"],
-      "geo_tags": ["US", "Argentina"],
-      "sector_tags": ["TECH", "FINANCE"],
-      "uncertainty": false,
-      "source_urls": [],
-      "duplication_notes": ""
-    }}
-  ]
-}}"""
-        
-        try:
-            logger.info(f"Normalizando {len(news_items)} noticias (Paso 1)")
-            
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "You are a fact extraction assistant. Extract structured data from news articles. "
-                            "Return only valid JSON. Validate URLs and drop clearly duplicated stories. "
-                            "Keep an uncertainty flag if details are missing."
-                        )
-                    },
-                    {
-                        "role": "user",
-                        "content": normalization_prompt
-                    }
-                ],
-                temperature=0.3,  # Lower temperature for factual extraction
-                response_format={"type": "json_object"},
-                timeout=60.0
-            )
-            
-            content = response.choices[0].message.content
-            # Parse JSON response
             try:
-                normalized_data = json.loads(content)
-            except json.JSONDecodeError:
-                # Try to extract JSON from text if wrapped
-                json_start = content.find('[')
-                json_end = content.rfind(']') + 1
-                if json_start >= 0 and json_end > json_start:
-                    normalized_data = json.loads(content[json_start:json_end])
-                else:
-                    json_start = content.find('{')
-                    json_end = content.rfind('}') + 1
-                    if json_start >= 0 and json_end > json_start:
-                        normalized_data = json.loads(content[json_start:json_end])
+                # Combinar título y cuerpo
+                full_text = f"{item.title or ''} {item.body}".strip()
+                
+                # Extraer datos usando NLP local
+                analysis = nlp_service.analyze_news(full_text)
+                
+                # Análisis de sentimiento
+                sentiment_result = sentiment_service.analyze_sentiment(
+                    text=item.body,
+                    title=item.title
+                )
+                
+                # Clasificación de sector
+                sector_result = sector_service.classify_sector(
+                    text=item.body,
+                    title=item.title
+                )
+                
+                # Extraer tickers
+                tickers = analysis["tickers"]
+                # Agregar sufijo .US si no tiene (asumir US por defecto)
+                tickers_with_suffix = [
+                    f"{t}.US" if "." not in t else t 
+                    for t in tickers
+                ]
+                
+                # Extraer ubicaciones geográficas
+                geo_tags = analysis["entities"].get("GPE", [])
+                
+                # Convertir sector a formato de tags
+                sector_tags = []
+                if sector_result["primary_sector"]:
+                    # Mapear a formato estándar
+                    sector_mapping = {
+                        "tecnología": "TECH",
+                        "finanzas": "FINANCE",
+                        "energía": "ENERGY",
+                        "salud": "HEALTH",
+                        "consumo": "CONSUMER",
+                        "industria": "INDUSTRIAL",
+                        "telecomunicaciones": "TELECOM",
+                        "bienes raíces": "REAL_ESTATE"
+                    }
+                    primary_sector = sector_result["primary_sector"]
+                    sector_tag = sector_mapping.get(primary_sector, primary_sector.upper())
+                    sector_tags = [sector_tag]
+                
+                # Generar bullets básicos (primeras 2 oraciones del texto)
+                sentences = full_text.split('.')[:2]
+                plain_bullets = [s.strip() + '.' for s in sentences if s.strip()]
+                if not plain_bullets:
+                    plain_bullets = [full_text[:200] + "..."]
+                
+                # Parsear fecha
+                try:
+                    if isinstance(item.created_at, str):
+                        date_str = item.created_at
                     else:
-                        raise ValueError("No se pudo parsear JSON de la respuesta")
-            
-            # Handle both array and object with array key
-            if isinstance(normalized_data, dict):
-                # Try common keys
-                normalized_list = normalized_data.get("items", normalized_data.get("news", normalized_data.get("data", [])))
-                if not normalized_list:
-                    # If dict but no array key, check if it's a single item
-                    if "id" in normalized_data:
-                        normalized_list = [normalized_data]
-                    else:
-                        normalized_list = []
-            elif isinstance(normalized_data, list):
-                normalized_list = normalized_data
-            else:
-                normalized_list = []
-            
-            logger.info(f"Normalizadas {len(normalized_list)} noticias exitosamente")
-            return normalized_list
-            
-        except Exception as e:
-            logger.error(f"Error en normalización (Paso 1): {e}", exc_info=True)
-            # Fallback: crear normalización básica
-            return self._create_fallback_normalization(news_items)
+                        date_str = item.created_at.isoformat() if item.created_at else None
+                except:
+                    date_str = None
+                
+                # Determinar incertidumbre (si falta información clave)
+                uncertainty = (
+                    not tickers_with_suffix and 
+                    not geo_tags and 
+                    not sector_tags and
+                    len(full_text) < 100
+                )
+                
+                normalized_item = {
+                    "id": item.id,
+                    "title": item.title or "Sin título",
+                    "date": date_str,
+                    "source": item.source or "Desconocida",
+                    "plain_bullets": plain_bullets,
+                    "tickers": tickers_with_suffix,
+                    "geo_tags": geo_tags,
+                    "sector_tags": sector_tags,
+                    "uncertainty": uncertainty,
+                    "source_urls": [],
+                    "duplication_notes": "",
+                    "sentiment": sentiment_result["sentiment"],  # Agregar sentimiento
+                    "sentiment_confidence": sentiment_result["confidence"],
+                    "sector_confidence": sector_result["confidence"]
+                }
+                
+                normalized_list.append(normalized_item)
+                
+                logger.debug(
+                    f"Noticia ID {item.id} normalizada localmente: "
+                    f"sentiment={sentiment_result['sentiment']}, "
+                    f"sector={sector_result['primary_sector']}, "
+                    f"tickers={len(tickers_with_suffix)}, "
+                    f"geo_tags={len(geo_tags)}"
+                )
+                
+            except Exception as e:
+                logger.error(f"Error normalizando noticia ID {item.id}: {e}", exc_info=True)
+                # Crear item básico de fallback
+                normalized_list.append({
+                    "id": item.id,
+                    "title": item.title or "Sin título",
+                    "date": item.created_at.isoformat() if item.created_at else None,
+                    "source": item.source or "Desconocida",
+                    "plain_bullets": [item.body[:200] + "..." if len(item.body) > 200 else item.body],
+                    "tickers": [],
+                    "geo_tags": [],
+                    "sector_tags": [],
+                    "uncertainty": True,
+                    "source_urls": [],
+                    "duplication_notes": f"Error en normalización: {str(e)}",
+                    "sentiment": "neutral",
+                    "sentiment_confidence": 0.0,
+                    "sector_confidence": 0.0
+                })
+        
+        logger.info(
+            f"Normalizadas {len(normalized_list)} noticias exitosamente usando NLP local "
+            f"(sin llamadas a OpenAI para sentimiento/sectores)"
+        )
+        return normalized_list
     
     def analyze_normalized_news(
         self,
@@ -293,23 +313,12 @@ Formato JSON de respuesta:
             return self._create_fallback_analysis(normalized_news)
     
     def _create_fallback_normalization(self, news_items: List[NewsItemResponse]) -> List[Dict]:
-        """Crea normalización básica como fallback."""
-        normalized = []
-        for item in news_items:
-            normalized.append({
-                "id": item.id,
-                "title": item.title or "Sin título",
-                "date": item.created_at,
-                "source": item.source or None,
-                "plain_bullets": [item.body[:200] + "..." if len(item.body) > 200 else item.body],
-                "tickers": [],
-                "geo_tags": [],
-                "sector_tags": [],
-                "uncertainty": True,
-                "source_urls": [],
-                "duplication_notes": "Normalización fallback - datos limitados"
-            })
-        return normalized
+        """
+        Crea normalización básica usando NLP local (sin LLM) como fallback.
+        Este método delega a normalize_news_batch que ya usa NLP local.
+        """
+        logger.warning(f"Usando normalización de fallback local para {len(news_items)} noticias")
+        return self.normalize_news_batch(news_items)
     
     def _create_fallback_analysis(self, normalized_news: List[Dict]) -> Dict:
         """Crea análisis básico como fallback."""

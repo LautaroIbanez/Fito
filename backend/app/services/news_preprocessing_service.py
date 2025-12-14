@@ -1,37 +1,36 @@
-"""Servicio para preprocesar y estandarizar noticias usando OpenAI."""
+"""Servicio para preprocesar y estandarizar noticias usando NLP local (sin LLM)."""
 import logging
 import json
-from typing import Dict
-from openai import OpenAI
+import re
+from typing import Dict, List, Optional
+from datetime import datetime, timezone
 from app.config import (
-    OPENAI_API_KEY,
-    OPENAI_MODEL,
-    OPENAI_TEMPERATURE,
     STANDARDIZED_NEWS_MAX_BULLET_LENGTH,
     STANDARDIZED_NEWS_MIN_BULLETS,
     STANDARDIZED_NEWS_MAX_BULLETS,
     STANDARDIZED_NEWS_SENTIMENT_ENUM
 )
 from app.models import StandardizedNewsData
+from app.services.local_nlp import get_local_nlp_service
+from app.services.sentiment_service import get_sentiment_service
+from app.services.sector_service import get_sector_service
 
 logger = logging.getLogger(__name__)
 
 
 class NewsPreprocessingService:
-    """Servicio para preprocesar y estandarizar noticias."""
+    """Servicio para preprocesar y estandarizar noticias usando NLP local."""
     
     def __init__(self):
-        """Inicializa el cliente de OpenAI."""
-        if not OPENAI_API_KEY or OPENAI_API_KEY == "your_openai_api_key_here":
-            raise ValueError("OPENAI_API_KEY no está configurada correctamente en app/config.py")
-        
-        self.client = OpenAI(api_key=OPENAI_API_KEY)
-        self.model = OPENAI_MODEL
-        self.temperature = OPENAI_TEMPERATURE
+        """Inicializa los servicios de NLP local."""
+        self.nlp_service = get_local_nlp_service()
+        self.sentiment_service = get_sentiment_service()
+        self.sector_service = get_sector_service()
+        logger.info("NewsPreprocessingService inicializado (sin LLM, usando NLP local)")
     
     def standardize_news(self, article_text: str) -> StandardizedNewsData:
         """
-        Estandariza una noticia usando OpenAI para extraer campos estructurados.
+        Estandariza una noticia usando NLP local (sin LLM).
         
         Args:
             article_text: Texto completo del artículo
@@ -39,88 +38,239 @@ class NewsPreprocessingService:
         Returns:
             StandardizedNewsData: Datos estandarizados de la noticia
         """
+        if not article_text or not article_text.strip():
+            raise ValueError("El texto del artículo no puede estar vacío")
+        
         try:
-            prompt = self._build_standardization_prompt(article_text)
+            logger.info(f"Estandarizando noticia usando NLP local (sin LLM)")
             
-            logger.info(f"Estandarizando noticia con modelo {self.model}")
+            # Analizar noticia completa con NLP local
+            analysis = self.nlp_service.analyze_news(article_text)
             
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "Eres un asistente experto en análisis de noticias financieras. "
-                            "Tu tarea es extraer información estructurada de artículos de noticias "
-                            "y presentarla en formato JSON estricto. "
-                            "Sé preciso y conciso. Cada bullet point del resumen debe tener máximo "
-                            f"{STANDARDIZED_NEWS_MAX_BULLET_LENGTH} palabras."
-                        )
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                temperature=self.temperature,
-                response_format={"type": "json_object"},
-                timeout=60.0
-            )
+            # Extraer título (primera línea o primeros 100 caracteres)
+            title = self._extract_title(article_text)
             
-            response_text = response.choices[0].message.content
-            standardized_dict = json.loads(response_text)
+            # Extraer fecha de publicación (buscar patrones de fecha)
+            publication_date = self._extract_publication_date(article_text)
+            
+            # Extraer fuente (buscar al inicio del texto)
+            source = self._extract_source(article_text)
+            
+            # Generar bullets de resumen (primeras oraciones del texto)
+            summary_bullets = self._generate_summary_bullets(article_text)
+            
+            # Extraer personas y empresas clave (entidades)
+            key_people_companies = self._extract_key_entities(article_text, analysis)
+            
+            # Extraer números y métricas
+            quoted_numbers_metrics = self._extract_numbers_metrics(article_text)
+            
+            # Analizar sentimiento (usar servicio local)
+            sentiment_result = self.sentiment_service.analyze_sentiment(article_text)
+            sentiment = self._map_sentiment_to_enum(sentiment_result["sentiment"])
+            
+            # Generar "why_it_matters" básico
+            why_it_matters = self._generate_why_it_matters(article_text, analysis, sentiment_result)
+            
+            # Construir datos estandarizados
+            standardized_dict = {
+                "title": title,
+                "publication_date": publication_date,
+                "source": source,
+                "summary_bullets": summary_bullets,
+                "key_people_companies": key_people_companies,
+                "quoted_numbers_metrics": quoted_numbers_metrics,
+                "sentiment": sentiment,
+                "why_it_matters": why_it_matters
+            }
             
             # Validar y limpiar los datos
             standardized_data = self._validate_and_clean_standardized_data(standardized_dict)
             
-            logger.info(f"Noticia estandarizada exitosamente")
+            logger.info(
+                f"Noticia estandarizada exitosamente (sin LLM): "
+                f"sentiment={sentiment}, sector={analysis.get('primary_sector', 'N/A')}, "
+                f"bullets={len(summary_bullets)}, entities={len(key_people_companies)}"
+            )
             return standardized_data
             
-        except json.JSONDecodeError as e:
-            logger.error(f"Error parseando JSON de respuesta de OpenAI: {e}")
-            raise ValueError(f"Error procesando respuesta de OpenAI: formato JSON inválido")
         except Exception as e:
-            error_str = str(e)
-            logger.error(f"Error estandarizando noticia con OpenAI: {e}", exc_info=True)
-            
-            if "401" in error_str or "invalid_api_key" in error_str:
-                raise ValueError(
-                    "Error de autenticación con OpenAI. Verifica tu API key en app/config.py"
-                )
-            elif "429" in error_str or "rate_limit" in error_str:
-                raise ValueError("Límite de tasa excedido. Por favor, intenta más tarde.")
-            elif "insufficient_quota" in error_str:
-                raise ValueError("Cuota de OpenAI agotada. Verifica tu cuenta.")
-            else:
-                raise ValueError(f"Error al estandarizar noticia: {error_str}")
+            logger.error(f"Error estandarizando noticia con NLP local: {e}", exc_info=True)
+            raise ValueError(f"Error al estandarizar noticia: {str(e)}")
     
-    def _build_standardization_prompt(self, article_text: str) -> str:
-        """Construye el prompt para estandarización."""
-        return f"""Analiza el siguiente artículo de noticias y extrae la información estructurada solicitada.
-
-ARTÍCULO:
-{article_text}
-
-INSTRUCCIONES:
-Extrae la siguiente información y devuélvela en formato JSON estricto con las siguientes claves:
-
-1. "title": Título del artículo (string, requerido)
-2. "publication_date": Fecha de publicación en formato ISO (string, opcional, null si no se encuentra)
-3. "source": Fuente/publicación del artículo (string, opcional, null si no se encuentra)
-4. "summary_bullets": Array de 3-5 bullets de resumen (cada uno máximo {STANDARDIZED_NEWS_MAX_BULLET_LENGTH} palabras)
-5. "key_people_companies": Array de nombres de personas y empresas clave mencionadas (puede estar vacío)
-6. "quoted_numbers_metrics": Array de números y métricas citadas (ej: "$1.5B", "15% growth", "Q2 earnings", puede estar vacío)
-7. "sentiment": Sentimiento del artículo: uno de ["bullish", "bearish", "neutral"] (string, requerido)
-8. "why_it_matters": Una línea explicando por qué esta noticia importa desde la perspectiva de un inversor (string, requerido, máximo 100 palabras)
-
-REGLAS IMPORTANTES:
-- El sentimiento debe ser exactamente uno de: {', '.join(STANDARDIZED_NEWS_SENTIMENT_ENUM)}
-- Cada bullet en summary_bullets debe tener máximo {STANDARDIZED_NEWS_MAX_BULLET_LENGTH} palabras
-- Debes proporcionar entre {STANDARDIZED_NEWS_MIN_BULLETS} y {STANDARDIZED_NEWS_MAX_BULLETS} bullets
-- "why_it_matters" debe ser conciso y enfocado en implicaciones para inversores
-- Si no encuentras información para un campo opcional, usa null
-
-Responde SOLO con el JSON, sin texto adicional."""
+    def _extract_title(self, text: str) -> str:
+        """Extrae el título del artículo (primera línea o primeros 100 caracteres)."""
+        lines = text.split('\n')
+        for line in lines:
+            line = line.strip()
+            if line and len(line) > 10 and len(line) < 200:
+                return line
+        
+        # Si no hay línea adecuada, usar primeros caracteres
+        title = text[:100].strip()
+        if title.endswith('...'):
+            title = title[:-3]
+        return title or "Sin título"
+    
+    def _extract_publication_date(self, text: str) -> Optional[str]:
+        """Extrae fecha de publicación usando patrones regex."""
+        # Patrones comunes de fecha
+        date_patterns = [
+            r'\b(\d{4}-\d{2}-\d{2})\b',  # YYYY-MM-DD
+            r'\b(\d{2}/\d{2}/\d{4})\b',  # DD/MM/YYYY
+            r'\b(\d{2}-\d{2}-\d{4})\b',  # DD-MM-YYYY
+            r'\b(\w+\s+\d{1,2},\s+\d{4})\b',  # Month DD, YYYY
+        ]
+        
+        for pattern in date_patterns:
+            match = re.search(pattern, text[:500])  # Buscar en primeros 500 caracteres
+            if match:
+                try:
+                    date_str = match.group(1)
+                    # Intentar parsear
+                    if '-' in date_str and len(date_str) == 10:
+                        return date_str
+                except:
+                    pass
+        
+        return None
+    
+    def _extract_source(self, text: str) -> Optional[str]:
+        """Extrae la fuente del artículo (buscar al inicio)."""
+        # Buscar patrones comunes de fuente
+        source_patterns = [
+            r'^(?:Por|By|Fuente|Source):\s*([A-Z][A-Za-z\s]+)',
+            r'^([A-Z][A-Za-z\s]+)\s*[-–]\s*',  # Nombre - inicio
+        ]
+        
+        first_lines = text.split('\n')[:3]
+        for line in first_lines:
+            for pattern in source_patterns:
+                match = re.search(pattern, line)
+                if match:
+                    source = match.group(1).strip()
+                    if len(source) > 2 and len(source) < 100:
+                        return source
+        
+        return None
+    
+    def _generate_summary_bullets(self, text: str) -> List[str]:
+        """Genera bullets de resumen desde las primeras oraciones."""
+        # Dividir en oraciones
+        sentences = re.split(r'[.!?]+', text)
+        bullets = []
+        
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+            
+            # Limitar longitud de palabras
+            words = sentence.split()
+            if len(words) > STANDARDIZED_NEWS_MAX_BULLET_LENGTH:
+                words = words[:STANDARDIZED_NEWS_MAX_BULLET_LENGTH]
+                sentence = " ".join(words) + "..."
+            
+            if len(sentence) > 20:  # Mínimo de caracteres
+                bullets.append(sentence)
+                if len(bullets) >= STANDARDIZED_NEWS_MAX_BULLETS:
+                    break
+        
+        # Asegurar mínimo de bullets
+        if len(bullets) < STANDARDIZED_NEWS_MIN_BULLETS:
+            # Usar primeros caracteres del texto
+            remaining = STANDARDIZED_NEWS_MIN_BULLETS - len(bullets)
+            text_remaining = text[len(" ".join(bullets)):].strip()
+            words = text_remaining.split()[:STANDARDIZED_NEWS_MAX_BULLET_LENGTH * remaining]
+            if words:
+                additional = " ".join(words)
+                if len(additional) > 20:
+                    bullets.append(additional)
+        
+        return bullets[:STANDARDIZED_NEWS_MAX_BULLETS]
+    
+    def _extract_key_entities(self, text: str, analysis: Dict) -> List[str]:
+        """Extrae personas y empresas clave de las entidades."""
+        entities = []
+        
+        # Agregar organizaciones
+        entities.extend(analysis.get("entities", {}).get("ORG", []))
+        
+        # Agregar personas
+        entities.extend(analysis.get("entities", {}).get("PERSON", []))
+        
+        # Limitar y limpiar
+        entities = [e.strip() for e in entities if e and len(e.strip()) > 2]
+        entities = list(dict.fromkeys(entities))  # Eliminar duplicados manteniendo orden
+        
+        return entities[:10]  # Máximo 10 entidades
+    
+    def _extract_numbers_metrics(self, text: str) -> List[str]:
+        """Extrae números y métricas usando regex."""
+        metrics = []
+        
+        # Patrones para métricas financieras
+        patterns = [
+            r'\$[\d,]+(?:\.\d+)?[BMK]?',  # Montos en dólares
+            r'\d+\.?\d*\s*%',  # Porcentajes
+            r'\d+\.?\d*\s*(?:millones|millón|billones|billón|millones de|billones de)',  # Montos en español
+            r'Q\d',  # Trimestres (Q1, Q2, etc.)
+            r'\d{4}',  # Años
+        ]
+        
+        for pattern in patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            metrics.extend(matches)
+        
+        # Limpiar y limitar
+        metrics = [m.strip() for m in metrics if m]
+        metrics = list(dict.fromkeys(metrics))  # Eliminar duplicados
+        
+        return metrics[:10]  # Máximo 10 métricas
+    
+    def _map_sentiment_to_enum(self, sentiment: str) -> str:
+        """Mapea sentimiento de NLP local a enum requerido."""
+        sentiment_lower = sentiment.lower()
+        
+        if sentiment_lower == "positive":
+            return "bullish"
+        elif sentiment_lower == "negative":
+            return "bearish"
+        else:
+            return "neutral"
+    
+    def _generate_why_it_matters(self, text: str, analysis: Dict, sentiment_result: Dict) -> str:
+        """Genera una línea básica de 'why_it_matters'."""
+        sector = analysis.get("primary_sector")
+        sentiment = sentiment_result["sentiment"]
+        
+        # Construir mensaje básico
+        parts = []
+        
+        if sector:
+            parts.append(f"Impacto en sector {sector}")
+        
+        if sentiment == "positive":
+            parts.append("tendencia positiva")
+        elif sentiment == "negative":
+            parts.append("riesgo identificado")
+        else:
+            parts.append("desarrollo relevante")
+        
+        # Agregar información de tickers si hay
+        tickers = analysis.get("tickers", [])
+        if tickers:
+            parts.append(f"afecta a {', '.join(tickers[:3])}")
+        
+        why_it_matters = ". ".join(parts) + "."
+        
+        # Limitar a 100 palabras
+        words = why_it_matters.split()
+        if len(words) > 100:
+            words = words[:100]
+            why_it_matters = " ".join(words)
+        
+        return why_it_matters if why_it_matters else "Noticia relevante para inversores."
     
     def _validate_and_clean_standardized_data(self, data: Dict) -> StandardizedNewsData:
         """

@@ -14,6 +14,9 @@ from app.models import (
     ScenarioRisk,
     ScenarioInvalidator
 )
+from app.services.prompt_template_service import PromptTemplateService
+from app.services.prompt_cache_service import PromptCacheService, CACHE_TTL
+from app.services.token_logger import token_logger
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +32,8 @@ class ScenarioGenerationService:
         self.client = OpenAI(api_key=OPENAI_API_KEY)
         self.model = OPENAI_MODEL
         self.temperature = OPENAI_TEMPERATURE
+        self.template_service = PromptTemplateService()
+        self.cache_service = PromptCacheService()
     
     def generate_scenarios(
         self, 
@@ -50,29 +55,58 @@ class ScenarioGenerationService:
             return {}
         
         try:
-            prompt = self._build_scenario_generation_prompt(driver, related_news_items)
+            driver_name = driver.get('driver', 'Unknown')
+            
+            # Construir prompt optimizado usando plantillas
+            prompt_data = self.template_service.build_optimized_prompt(
+                template_type="scenario_generation",
+                variable_data={
+                    "driver": driver,
+                    "related_news_items": related_news_items
+                }
+            )
+            
+            # Verificar caché (solo para contexto estático del driver, no para noticias específicas)
+            static_data = {"driver_name": driver_name, "context": "scenario_generation"}
+            variable_data = {"news_count": len(related_news_items)}
+            
+            # Nota: No cacheamos escenarios completos porque las noticias cambian frecuentemente
+            # Pero podríamos cachear si las noticias no han cambiado (usando hash)
             
             logger.info(
-                f"Generando escenarios para driver '{driver.get('driver')}': "
-                f"{len(related_news_items)} noticias relacionadas"
+                f"Generando escenarios para driver '{driver_name}': "
+                f"{len(related_news_items)} noticias relacionadas, "
+                f"{prompt_data['estimated_tokens']} tokens estimados"
             )
+            
+            # Condición de salida explícita: verificar si el prompt es válido
+            if not prompt_data.get("is_valid", True):
+                logger.warning(
+                    f"Prompt inválido para driver '{driver_name}': "
+                    f"{prompt_data.get('char_count', 0)} chars, "
+                    f"{prompt_data.get('estimated_tokens', 0)} tokens estimados. "
+                    f"Saltando llamada a OpenAI."
+                )
+                raise ValueError(
+                    f"Prompt excede límites de tokens para driver '{driver_name}'. "
+                    f"Reducir cantidad de noticias o truncar contenido."
+                )
+            
+            # Condición de salida: verificar datos mínimos
+            if len(related_news_items) == 0:
+                logger.warning(f"No hay noticias relacionadas para driver '{driver_name}'. Saltando generación.")
+                return {}
             
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {
                         "role": "system",
-                        "content": (
-                            "Eres un estratega financiero experto especializado en generación de escenarios. "
-                            "Generas escenarios realistas basados en datos y noticias del mercado. "
-                            "Cada escenario incluye supuestos claros, riesgos identificados e invalidadores. "
-                            "Eres preciso, evitas especulación sin fundamento, y siempre basas tus escenarios "
-                            "en la información proporcionada."
-                        )
+                        "content": prompt_data["system_content"]
                     },
                     {
                         "role": "user",
-                        "content": prompt
+                        "content": prompt_data["user_content"]
                     }
                 ],
                 temperature=self.temperature,
@@ -81,12 +115,37 @@ class ScenarioGenerationService:
             )
             
             response_text = response.choices[0].message.content
-            scenarios_dict = json.loads(response_text)
+            
+            # Log de tokens
+            if response.usage:
+                token_logger.log_usage(
+                    prompt_tokens=response.usage.prompt_tokens,
+                    completion_tokens=response.usage.completion_tokens,
+                    step_name=f"scenario_generation_{driver_name}",
+                    prompt_type="scenario_generation",
+                    response=response
+                )
+            
+            # Log de respuesta para debugging
+            logger.debug(f"Respuesta de OpenAI para driver '{driver_name}' (primeros 500 chars): {response_text[:500]}")
+            
+            try:
+                scenarios_dict = json.loads(response_text)
+            except json.JSONDecodeError as e:
+                logger.error(f"Error parseando JSON de respuesta de OpenAI: {e}")
+                logger.error(f"Respuesta completa: {response_text}")
+                raise ValueError(f"Error procesando respuesta de OpenAI: formato JSON inválido")
+            
+            # Log del diccionario parseado para debugging
+            logger.debug(f"Escenarios parseados (claves): {list(scenarios_dict.keys())}")
             
             # Validar y estructurar los escenarios
             scenarios = self._validate_and_structure_scenarios(scenarios_dict)
             
-            logger.info(f"Escenarios generados exitosamente para driver '{driver.get('driver')}'")
+            logger.info(
+                f"Escenarios generados exitosamente para driver '{driver_name}'. "
+                f"Tokens usados: {response.usage.total_tokens if response.usage else 'N/A'}"
+            )
             return scenarios
             
         except json.JSONDecodeError as e:

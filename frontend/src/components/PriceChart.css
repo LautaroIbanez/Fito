@@ -50,6 +50,29 @@
   gap: 8px;
 }
 
+.legend-section {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.legend-toggle-item {
+  cursor: pointer;
+  user-select: none;
+}
+
+.legend-toggle-item input[type="checkbox"] {
+  margin-right: 4px;
+  cursor: pointer;
+}
+
+.legend-signal-count {
+  font-size: 0.85rem;
+  color: #666;
+  font-style: italic;
+}
+
 .legend-line {
   display: block;
   border-radius: 2px;
@@ -116,6 +139,15 @@
   margin: 8px 0 0 0;
   color: #f5a623;
   font-weight: 500;
+}
+
+.signals-summary {
+  margin: 8px 0;
+  padding: 8px;
+  background: #e8f5e9;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  color: #2e7d32;
 }
 
 /* Responsive */

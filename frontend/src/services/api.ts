@@ -268,6 +268,32 @@ export const portfolioApi = {
     return response.data
   },
 
+  getPriceData: async (itemId: number, period: string = '1mo', interval: string = '1d'): Promise<PriceDataResponse> => {
+    const response = await axios.get<PriceDataResponse>(`${API_BASE_URL}/portfolio/${itemId}/price-data?period=${period}&interval=${interval}`)
+    return response.data
+  },
+
+}
+
+export interface PriceDataPoint {
+  date: string
+  timestamp: number
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
+}
+
+export interface PriceDataResponse {
+  symbol: string
+  current_price?: number
+  currency: string
+  exchange: string
+  data: PriceDataPoint[]
+  period: string
+  interval: string
+  data_points: number
 }
 
 

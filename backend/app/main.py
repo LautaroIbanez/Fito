@@ -1,24 +1,20 @@
 """Aplicación principal FastAPI."""
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from typing import Optional
 import logging
 
 from app.config import (
-    validate_config, 
     RATE_LIMIT_PER_MINUTE,
     OPENAI_MODEL,
     OPENAI_TEMPERATURE,
-    OPENAI_MAX_TOKENS,
-    validate_openai_model
+    OPENAI_MAX_TOKENS
 )
 from app.database import init_db
 from app.routers import news, analysis, portfolio, suggestions, opportunities, normalized_news, scenarios
-
-# Validar configuración antes de iniciar
-validate_config()
 
 # Setup logging
 logging.basicConfig(
@@ -28,21 +24,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Verificar y loguear configuración del modelo OpenAI
-is_valid_model, model_message = validate_openai_model()
-if is_valid_model:
-    logger.info("=" * 60)
-    logger.info("CONFIGURACIÓN DE OPENAI:")
-    logger.info(f"  Modelo: {OPENAI_MODEL}")
-    logger.info(f"  Temperatura: {OPENAI_TEMPERATURE}")
-    logger.info(f"  Máximo de tokens: {OPENAI_MAX_TOKENS}")
-    logger.info(f"  Estado: {model_message}")
-    logger.info("=" * 60)
-else:
-    logger.warning("=" * 60)
-    logger.warning("ADVERTENCIA DE CONFIGURACIÓN DE OPENAI:")
-    logger.warning(f"  {model_message}")
-    logger.warning("=" * 60)
+# Log de configuración del motor local
+logger.info("=" * 60)
+logger.info("MOTOR LOCAL ACTIVO (SIN LLM)")
+logger.info("  Resumen: Extractivo (NLP local)")
+logger.info("  Drivers: Detección por keywords/entidades")
+logger.info("  Escenarios: Plantillas 'si-entonces'")
+logger.info("  Mapeo: Reglas basadas en coincidencias")
+logger.info("  Sin llamadas HTTP externas")
+logger.info("  Sin costos de API")
+logger.info("=" * 60)
+
+# Nota: OpenAI solo se usa en modo legacy (use_extractive=False o use_rule_based=False)
+# La validación de OpenAI se omite ya que no es requerida para el flujo estándar
 
 # Inicializar base de datos
 init_db()
@@ -99,6 +93,65 @@ async def root():
 async def health():
     """Endpoint de salud."""
     return {"status": "healthy"}
+
+
+@app.get("/api/token-stats")
+async def get_token_stats():
+    """Endpoint para obtener estadísticas de tokens usados."""
+    from app.services.token_logger import token_logger
+    return token_logger.get_session_summary()
+
+
+@app.get("/api/cache-stats")
+async def get_cache_stats():
+    """Endpoint para obtener estadísticas del caché."""
+    from app.services.prompt_cache_service import PromptCacheService
+    cache_service = PromptCacheService()
+    cache_service.clear_expired()  # Limpiar expirados antes de mostrar stats
+    return cache_service.get_stats()
+
+
+@app.post("/api/cache/clear")
+async def clear_cache(prompt_type: Optional[str] = Query(None)):
+    """Endpoint para limpiar el caché (opcionalmente por tipo)."""
+    from app.services.prompt_cache_service import PromptCacheService
+    cache_service = PromptCacheService()
+    cache_service.invalidate(prompt_type=prompt_type)
+    cache_service.clear_expired()
+    return {
+        "message": f"Caché limpiado{' para tipo ' + prompt_type if prompt_type else ''}",
+        "stats": cache_service.get_stats()
+    }
+
+
+@app.get("/api/local-nlp/test")
+async def test_local_nlp(text: Optional[str] = Query("Apple anunció crecimiento récord en ventas", description="Texto a analizar")):
+    """Endpoint de prueba para el sistema de NLP local."""
+    try:
+        from app.services.local_nlp import get_local_nlp_service
+        
+        nlp_service = get_local_nlp_service()
+        
+        if not nlp_service.is_ready():
+            return {
+                "status": "error",
+                "message": "Servicio de NLP no está listo"
+            }
+        
+        result = nlp_service.analyze_news(text)
+        
+        return {
+            "status": "success",
+            "is_ready": nlp_service.is_ready(),
+            "analysis": result
+        }
+    except Exception as e:
+        import traceback
+        return {
+            "status": "error",
+            "message": str(e),
+            "traceback": traceback.format_exc()
+        }
 
 
 if __name__ == "__main__":

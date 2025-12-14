@@ -1,0 +1,70 @@
+{
+  "version": "1.0.0",
+  "description": "Diccionario de palabras clave para clasificación de sectores",
+  "sectors": {
+    "tecnología": {
+      "es": [
+        "tecnología", "tecnológico", "tecnológica", "tech", "software", "hardware", "inteligencia artificial", "ia", "ai", "machine learning", "aprendizaje automático", "cloud", "nube", "cloud computing", "computación en la nube", "datos", "big data", "analytics", "análisis de datos", "ciberseguridad", "seguridad informática", "blockchain", "criptomoneda", "criptomonedas", "bitcoin", "ethereum", "startup", "startups", "innovación", "innovador", "innovadora", "digital", "digitalización", "transformación digital", "app", "aplicación", "aplicaciones", "plataforma", "plataformas", "sistema operativo", "sistemas operativos", "servidor", "servidores", "red", "redes", "internet", "web", "e-commerce", "comercio electrónico", "fintech", "fintechs"
+      ],
+      "en": [
+        "technology", "tech", "software", "hardware", "artificial intelligence", "ai", "machine learning", "cloud", "cloud computing", "data", "big data", "analytics", "cybersecurity", "cyber security", "blockchain", "cryptocurrency", "cryptocurrencies", "bitcoin", "ethereum", "startup", "startups", "innovation", "innovative", "digital", "digitalization", "digital transformation", "app", "application", "applications", "platform", "platforms", "operating system", "operating systems", "server", "servers", "network", "networks", "internet", "web", "e-commerce", "ecommerce", "fintech"
+      ]
+    },
+    "finanzas": {
+      "es": [
+        "finanzas", "financiero", "financiera", "bancario", "bancaria", "banco", "bancos", "banca", "crédito", "créditos", "préstamo", "préstamos", "hipoteca", "hipotecas", "inversión", "inversiones", "inversor", "inversores", "acciones", "acción", "bonos", "bono", "títulos", "título", "valores", "valor", "bolsa", "bolsas", "mercado", "mercados", "trading", "operaciones", "operación", "derivados", "derivado", "futuros", "futuro", "opciones", "opción", "forex", "divisas", "moneda", "monedas", "dólar", "euro", "peso", "tasa de interés", "tasas de interés", "fed", "reserva federal", "bcra", "banco central", "política monetaria", "políticas monetarias", "inflación", "inflacionario", "inflacionaria", "deflación", "deflacionario", "deflacionaria", "riesgo", "riesgos", "riesgoso", "riesgosa", "volatilidad", "volátil", "liquidez", "líquido", "líquida"
+      ],
+      "en": [
+        "finance", "financial", "banking", "bank", "banks", "credit", "credits", "loan", "loans", "mortgage", "mortgages", "investment", "investments", "investor", "investors", "stock", "stocks", "shares", "bonds", "bond", "securities", "security", "exchange", "exchanges", "market", "markets", "trading", "operations", "operation", "derivatives", "derivative", "futures", "future", "options", "option", "forex", "currency", "currencies", "dollar", "euro", "interest rate", "interest rates", "fed", "federal reserve", "central bank", "monetary policy", "monetary policies", "inflation", "inflationary", "deflation", "deflationary", "risk", "risks", "risky", "volatility", "volatile", "liquidity", "liquid"
+      ]
+    },
+    "energía": {
+      "es": [
+        "energía", "energético", "energética", "petróleo", "crudo", "gas", "gas natural", "combustible", "combustibles", "refinería", "refinerías", "petrolera", "petroleras", "petrolero", "petroleros", "renovable", "renovables", "solar", "eólica", "eólico", "hidroeléctrica", "hidroeléctrico", "nuclear", "carbón", "carbón", "electricidad", "eléctrico", "eléctrica", "energía limpia", "energías limpias", "emisiones", "emisión", "carbono", "carbono neutral", "sostenible", "sostenibilidad", "clima", "climático", "climática", "cambio climático"
+      ],
+      "en": [
+        "energy", "energetic", "oil", "crude", "gas", "natural gas", "fuel", "fuels", "refinery", "refineries", "oil company", "oil companies", "renewable", "renewables", "solar", "wind", "wind power", "hydroelectric", "nuclear", "coal", "electricity", "electric", "clean energy", "clean energies", "emissions", "emission", "carbon", "carbon neutral", "sustainable", "sustainability", "climate", "climatic", "climate change"
+      ]
+    },
+    "salud": {
+      "es": [
+        "salud", "sanitario", "sanitaria", "médico", "médica", "medicina", "farmacéutico", "farmacéutica", "farmacia", "farmacias", "medicamento", "medicamentos", "droga", "drogas", "tratamiento", "tratamientos", "terapia", "terapias", "hospital", "hospitales", "clínica", "clínicas", "investigación médica", "investigaciones médicas", "ensayo clínico", "ensayos clínicos", "fda", "regulador", "reguladores", "regulación", "regulaciones", "biotech", "biotecnología", "biotecnológico", "biotecnológica", "genética", "genético", "genética", "vacuna", "vacunas", "diagnóstico", "diagnósticos", "equipo médico", "equipos médicos"
+      ],
+      "en": [
+        "health", "healthcare", "medical", "medicine", "pharmaceutical", "pharmaceuticals", "pharmacy", "drug", "drugs", "treatment", "treatments", "therapy", "therapies", "hospital", "hospitals", "clinic", "clinics", "medical research", "clinical trial", "clinical trials", "fda", "regulator", "regulators", "regulation", "regulations", "biotech", "biotechnology", "biotechnological", "genetics", "genetic", "vaccine", "vaccines", "diagnosis", "diagnostic", "medical equipment"
+      ]
+    },
+    "consumo": {
+      "es": [
+        "consumo", "consumidor", "consumidora", "consumidores", "retail", "minorista", "minoristas", "supermercado", "supermercados", "tienda", "tiendas", "comercio", "comercios", "venta", "ventas", "producto", "productos", "marca", "marcas", "alimentos", "alimento", "bebidas", "bebida", "textil", "textiles", "ropa", "vestimenta", "moda", "automotriz", "automóvil", "automóviles", "auto", "autos", "vehículo", "vehículos", "turismo", "turístico", "turística", "hotel", "hoteles", "restaurante", "restaurantes", "entretenimiento", "entretenimientos", "ocio", "recreación", "recreativo", "recreativa"
+      ],
+      "en": [
+        "consumption", "consumer", "consumers", "retail", "retailer", "retailers", "supermarket", "supermarkets", "store", "stores", "commerce", "sales", "product", "products", "brand", "brands", "food", "foods", "beverages", "beverage", "textile", "textiles", "clothing", "apparel", "fashion", "automotive", "automobile", "automobiles", "car", "cars", "vehicle", "vehicles", "tourism", "tourist", "hotel", "hotels", "restaurant", "restaurants", "entertainment", "leisure", "recreation", "recreational"
+      ]
+    },
+    "industria": {
+      "es": [
+        "industria", "industrial", "industriales", "manufactura", "manufacturero", "manufacturera", "fábrica", "fábricas", "producción", "productivo", "productiva", "maquinaria", "maquinarias", "equipo", "equipos", "infraestructura", "infraestructuras", "construcción", "constructivo", "constructiva", "obra", "obras", "ingeniería", "ingenieril", "acero", "metales", "metal", "minería", "minero", "minera", "mineral", "minerales", "química", "químico", "químicos", "petroquímica", "petroquímico", "petroquímicos", "logística", "logístico", "logísticos", "transporte", "transportes", "aeronáutico", "aeronáutica", "aeroespacial", "defensa", "militar"
+      ],
+      "en": [
+        "industry", "industrial", "manufacturing", "manufacturer", "factory", "factories", "production", "productive", "machinery", "equipment", "infrastructure", "construction", "constructive", "engineering", "steel", "metals", "metal", "mining", "miner", "mineral", "minerals", "chemical", "chemicals", "petrochemical", "petrochemicals", "logistics", "logistic", "transportation", "transport", "aeronautical", "aerospace", "defense", "military"
+      ]
+    },
+    "telecomunicaciones": {
+      "es": [
+        "telecomunicaciones", "telecom", "telefónica", "telefónicas", "telefónico", "telefónicos", "teléfono", "teléfonos", "móvil", "móviles", "celular", "celulares", "smartphone", "smartphones", "internet", "banda ancha", "fibra óptica", "fibra", "5g", "4g", "lte", "red móvil", "redes móviles", "operador", "operadores", "servicio", "servicios", "abonado", "abonados", "suscripción", "suscripciones", "datos móviles", "roaming", "cobertura", "coberturas"
+      ],
+      "en": [
+        "telecommunications", "telecom", "telephone", "telephones", "mobile", "mobiles", "cell phone", "cell phones", "smartphone", "smartphones", "internet", "broadband", "fiber optic", "fiber", "5g", "4g", "lte", "mobile network", "mobile networks", "operator", "operators", "service", "services", "subscriber", "subscribers", "subscription", "subscriptions", "mobile data", "roaming", "coverage"
+      ]
+    },
+    "bienes raíces": {
+      "es": [
+        "bienes raíces", "inmobiliario", "inmobiliaria", "inmobiliarias", "propiedad", "propiedades", "inmueble", "inmuebles", "vivienda", "viviendas", "casa", "casas", "departamento", "departamentos", "oficina", "oficinas", "comercial", "comerciales", "alquiler", "alquileres", "arrendamiento", "arrendamientos", "hipoteca", "hipotecas", "construcción", "constructora", "constructoras", "desarrollador", "desarrolladores", "desarrollo inmobiliario", "desarrollos inmobiliarios", "terreno", "terrenos", "loteo", "loteos"
+      ],
+      "en": [
+        "real estate", "property", "properties", "realty", "housing", "house", "houses", "apartment", "apartments", "office", "offices", "commercial", "rental", "rentals", "lease", "leases", "mortgage", "mortgages", "construction", "builder", "builders", "developer", "developers", "real estate development", "real estate developments", "land", "lot", "lots"
+      ]
+    }
+  }
+}

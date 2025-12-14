@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { portfolioApi, PortfolioItem, PortfolioItemCreate } from '../services/api'
+import { portfolioApi, PortfolioItem, PortfolioItemCreate, PriceDataResponse, PriceDataPoint } from '../services/api'
 import Modal from '../components/Modal'
 import PortfolioForm from '../components/PortfolioForm'
+import PriceChart from '../components/PriceChart'
 import './ActivoView.css'
 
 export default function ActivoView() {
@@ -11,6 +12,10 @@ export default function ActivoView() {
   const [error, setError] = useState<string | null>(null)
   const [editingItem, setEditingItem] = useState<PortfolioItem | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [priceData, setPriceData] = useState<PriceDataResponse | null>(null)
+  const [isLoadingPrice, setIsLoadingPrice] = useState(false)
+  const [priceError, setPriceError] = useState<string | null>(null)
+  const [pricePeriod, setPricePeriod] = useState<string>('1mo')
 
   useEffect(() => {
     loadPortfolio()
@@ -98,6 +103,32 @@ export default function ActivoView() {
       setIsSubmitting(false)
     }
   }
+
+  const handleLoadPriceData = async () => {
+    if (!selectedItem || !selectedItem.symbol) {
+      setPriceError('El activo seleccionado no tiene un símbolo configurado')
+      return
+    }
+
+    try {
+      setIsLoadingPrice(true)
+      setPriceError(null)
+      const data = await portfolioApi.getPriceData(selectedItem.id, pricePeriod, '1d')
+      setPriceData(data)
+    } catch (err: any) {
+      console.error('Error cargando datos de precio:', err)
+      setPriceError(err.response?.data?.detail || err.message || 'Error al obtener datos de precio y volumen')
+      setPriceData(null)
+    } finally {
+      setIsLoadingPrice(false)
+    }
+  }
+
+  // Limpiar datos de precio cuando cambia el item seleccionado
+  useEffect(() => {
+    setPriceData(null)
+    setPriceError(null)
+  }, [selectedItem?.id])
 
   if (isLoading) {
     return (
@@ -193,7 +224,34 @@ export default function ActivoView() {
 
           {selectedItem && (
             <div className="activo-details">
-              <h2>{selectedItem.name}</h2>
+              <div className="details-header">
+                <h2>{selectedItem.name}</h2>
+                <div className="price-data-controls">
+                  <select 
+                    value={pricePeriod} 
+                    onChange={(e) => setPricePeriod(e.target.value)}
+                    className="period-select"
+                    disabled={isLoadingPrice}
+                  >
+                    <option value="1d">1 Día</option>
+                    <option value="5d">5 Días</option>
+                    <option value="1mo">1 Mes</option>
+                    <option value="3mo">3 Meses</option>
+                    <option value="6mo">6 Meses</option>
+                    <option value="1y">1 Año</option>
+                    <option value="2y">2 Años</option>
+                  </select>
+                  <button
+                    onClick={handleLoadPriceData}
+                    disabled={isLoadingPrice || !selectedItem.symbol}
+                    className="update-price-button"
+                    title="Actualizar precio y volumen desde Yahoo Finance"
+                  >
+                    {isLoadingPrice ? '⏳ Cargando...' : '📈 Actualizar Precio/Volumen'}
+                  </button>
+                </div>
+              </div>
+              
               <div className="details-grid">
                 <div className="detail-item">
                   <span className="detail-label">Símbolo</span>
@@ -217,6 +275,14 @@ export default function ActivoView() {
                     </span>
                   </div>
                 )}
+                {priceData?.current_price && (
+                  <div className="detail-item">
+                    <span className="detail-label">Precio Actual</span>
+                    <span className="detail-value price-current">
+                      {priceData.currency} {priceData.current_price.toFixed(2)}
+                    </span>
+                  </div>
+                )}
                 {selectedItem.total_value && (
                   <div className="detail-item">
                     <span className="detail-label">Valor Total</span>
@@ -232,6 +298,55 @@ export default function ActivoView() {
                   </div>
                 )}
               </div>
+
+              {/* Gráfico de precio */}
+              {priceError && (
+                <div className="price-error">
+                  <p>⚠️ {priceError}</p>
+                  <button onClick={handleLoadPriceData} className="retry-price-button">
+                    Reintentar
+                  </button>
+                </div>
+              )}
+
+              {isLoadingPrice && (
+                <div className="price-loading">
+                  <div className="loading-spinner">⏳ Cargando datos de precio y volumen...</div>
+                </div>
+              )}
+
+              {priceData && priceData.data.length > 0 && !isLoadingPrice && (
+                <div className="price-chart-section">
+                  <h3>Gráfico de Precio y Volumen</h3>
+                  <PriceChart
+                    data={priceData.data.map(point => ({
+                      date: new Date(point.date),
+                      price: point.close
+                    }))}
+                    title={selectedItem.name}
+                    symbol={priceData.symbol}
+                    height={300}
+                    onTechnicalDataReady={(techData) => {
+                      // Los datos técnicos están disponibles para el asistente IA
+                      // Se pueden acceder también desde window.lastTechnicalData
+                      console.log('Datos técnicos listos para IA:', techData.formatted)
+                    }}
+                  />
+                  <div className="price-data-info">
+                    <p>
+                      <strong>Período:</strong> {pricePeriod} | 
+                      <strong> Puntos de datos:</strong> {priceData.data_points} | 
+                      <strong> Exchange:</strong> {priceData.exchange || 'N/A'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {priceData && priceData.data.length === 0 && !isLoadingPrice && (
+                <div className="price-empty">
+                  <p>No se encontraron datos de precio para este activo.</p>
+                </div>
+              )}
             </div>
           )}
         </div>

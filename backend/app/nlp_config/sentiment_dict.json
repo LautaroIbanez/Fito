@@ -1,0 +1,28 @@
+{
+  "version": "1.0.0",
+  "description": "Diccionario de palabras para análisis de sentimiento",
+  "positive": {
+    "es": [
+      "crecimiento", "aumento", "sube", "subida", "alza", "ganancia", "beneficio", "éxito", "éxitos", "éxito", "mejora", "mejoras", "optimista", "optimismo", "fuerte", "fuerte", "robusto", "robustez", "expansión", "expansivo", "recuperación", "recuperar", "alcanza", "alcanzar", "supera", "superar", "récord", "histórico", "histórica", "impulso", "impulsar", "momentum", "tendencia alcista", "tendencia positiva", "oportunidad", "oportunidades", "potencial", "prometedor", "prometedora", "confianza", "confiar", "estabilidad", "estable", "sólido", "sólida", "rentable", "rentabilidad", "dividendo", "dividendos", "recomendación", "comprar", "compra", "sobreponderar", "sobreponderación", "alcista", "alcistas"
+    ],
+    "en": [
+      "growth", "increase", "rise", "rises", "gains", "gain", "profit", "profits", "success", "successful", "improvement", "improvements", "optimistic", "optimism", "strong", "strength", "robust", "robustness", "expansion", "expansive", "recovery", "recover", "reaches", "reach", "exceeds", "exceed", "record", "historic", "historical", "momentum", "uptrend", "positive trend", "opportunity", "opportunities", "potential", "promising", "confidence", "confident", "stability", "stable", "solid", "profitable", "profitability", "dividend", "dividends", "recommendation", "buy", "purchase", "overweight", "bullish", "bull"
+    ]
+  },
+  "negative": {
+    "es": [
+      "caída", "caídas", "baja", "bajas", "descenso", "descensos", "pérdida", "pérdidas", "decepción", "decepcionante", "fracaso", "fracasos", "problema", "problemas", "riesgo", "riesgos", "preocupación", "preocupaciones", "incertidumbre", "incierto", "volatilidad", "volátil", "debilitamiento", "debilitar", "débil", "débil", "recesión", "recesivo", "crisis", "crisis", "colapso", "colapsar", "quiebra", "quebrar", "default", "moratoria", "moroso", "morosos", "bajista", "bajistas", "vender", "venta", "infraponderar", "infraponderación", "recomendación de venta", "reducir", "reducción", "recorte", "recortes", "desaceleración", "desacelerar", "contracción", "contraer", "inflación", "inflacionario", "inflacionaria", "deflación", "deflacionario", "deflacionaria", "desempleo", "desempleados", "paro", "parados"
+    ],
+    "en": [
+      "fall", "falls", "drop", "drops", "decline", "declines", "loss", "losses", "disappointment", "disappointing", "failure", "failures", "problem", "problems", "risk", "risks", "concern", "concerns", "uncertainty", "uncertain", "volatility", "volatile", "weakening", "weaken", "weak", "weakness", "recession", "recessionary", "crisis", "crises", "collapse", "collapses", "bankruptcy", "bankrupt", "default", "moratorium", "delinquent", "delinquency", "bearish", "bear", "sell", "sale", "underweight", "sell recommendation", "reduce", "reduction", "cut", "cuts", "slowdown", "slow", "contraction", "contract", "inflation", "inflationary", "deflation", "deflationary", "unemployment", "unemployed", "jobless"
+    ]
+  },
+  "neutral": {
+    "es": [
+      "mantiene", "mantener", "estable", "estabilidad", "sin cambios", "sin cambio", "neutral", "neutro", "neutra", "información", "informar", "reporte", "reportes", "análisis", "analizar", "datos", "dato", "cifras", "cifra", "indicador", "indicadores", "métrica", "métricas", "resultado", "resultados", "trimestre", "trimestres", "año", "años", "mes", "meses", "semana", "semanas"
+    ],
+    "en": [
+      "maintains", "maintain", "stable", "stability", "unchanged", "no change", "neutral", "information", "inform", "report", "reports", "analysis", "analyze", "data", "figure", "figures", "indicator", "indicators", "metric", "metrics", "result", "results", "quarter", "quarters", "year", "years", "month", "months", "week", "weeks"
+    ]
+  }
+}

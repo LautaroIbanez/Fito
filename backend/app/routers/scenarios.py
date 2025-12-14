@@ -106,6 +106,7 @@ async def generate_scenarios(
                         logger.warning(f"Noticia {item.id} no tiene cuerpo, omitiendo")
                         continue
                     
+                    # Estandarizar usando NLP local (sin LLM)
                     standardized_data = preprocessing_service.standardize_news(item.body)
                     
                     # Guardar datos estandarizados en la BD

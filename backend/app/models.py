@@ -234,6 +234,29 @@ class PortfolioListResponse(BaseModel):
     total: int
 
 
+class PriceDataPoint(BaseModel):
+    """Punto de datos de precio OHLCV."""
+    date: str
+    timestamp: int
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: int
+
+
+class PriceDataResponse(BaseModel):
+    """Respuesta con datos de precio y volumen."""
+    symbol: str
+    current_price: Optional[float] = None
+    currency: str = "USD"
+    exchange: str = ""
+    data: List[PriceDataPoint]
+    period: str = "1mo"
+    interval: str = "1d"
+    data_points: int
+
+
 # ==================== Alert Models ====================
 
 class AlertTriggerCreate(BaseModel):
@@ -971,6 +994,13 @@ class WatchlistListResponse(BaseModel):
 # ==================== Situation Summary Models ====================
 
 class BatchSummary(BaseModel):
+    """Resumen de un lote de noticias."""
+    batch_number: int = Field(..., description="Número del lote")
+    news_count: int = Field(..., description="Cantidad de noticias en el lote")
+    summary: str = Field(..., description="Resumen del lote")
+    tokens_used: Optional[int] = Field(None, description="Tokens usados (si aplica)")
+    char_count: Optional[int] = Field(None, description="Cantidad de caracteres del resumen")
+    estimated_tokens: Optional[int] = Field(None, description="Tokens estimados (método extractivo)")
     """Resumen parcial de un lote de noticias."""
     batch_number: int = Field(..., description="Número del lote")
     news_count: int = Field(..., description="Cantidad de noticias en este lote")
@@ -979,6 +1009,19 @@ class BatchSummary(BaseModel):
 
 
 class SituationSummaryResponse(BaseModel):
+    """Respuesta del resumen de situación."""
+    summary: str = Field(..., description="Resumen principal (compatibilidad)")
+    meta_summary: str = Field(..., description="Meta-resumen consolidado")
+    batch_summaries: List[BatchSummary] = Field(default_factory=list, description="Resúmenes parciales por lote")
+    news_count: int = Field(..., description="Cantidad total de noticias")
+    recent_news_count: int = Field(..., description="Cantidad de noticias recientes procesadas")
+    batches_processed: int = Field(..., description="Cantidad de lotes procesados")
+    total_prompt_tokens: int = Field(..., description="Tokens de prompt totales (estimados)")
+    estimated_tokens: Optional[int] = Field(None, description="Tokens estimados (método extractivo)")
+    generated_at: str = Field(..., description="Fecha de generación (ISO)")
+    has_content: bool = Field(..., description="Indica si hay contenido válido")
+    tokens_used: Optional[int] = Field(None, description="Tokens reales usados (método OpenAI)")
+    method: Optional[str] = Field(None, description="Método usado: 'extractive' o 'openai'")
     """Respuesta con resumen de situación actual."""
     summary: str = Field(..., description="Resumen de la situación actual del mercado (compatibilidad)")
     meta_summary: str = Field(default="", description="Meta-resumen consolidado de todos los lotes")
